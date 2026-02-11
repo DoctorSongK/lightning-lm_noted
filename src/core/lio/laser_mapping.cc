@@ -124,6 +124,7 @@ void LaserMapping::ProcessIMU(const lightning::IMUPtr &imu) {
     double timestamp = imu->timestamp;
 
     UL lock(mtx_buffer_);
+    // QUES: 这里发现的是imu时间戳滞后就会清空imu队列中所有的数据，如果说其相对于整体时间戳改变了呢，会有影响吗
     if (timestamp < last_timestamp_imu_) {
         LOG(WARNING) << "imu loop back, clear buffer";
         imu_buffer_.clear();
@@ -323,6 +324,8 @@ void LaserMapping::ProcessPointCloud2(const sensor_msgs::msg::PointCloud2::Share
                       << ", latest imu: " << last_timestamp_imu_;
 
             CloudPtr cloud(new PointCloudType());
+            // 首先对点云做预处理操作
+            // TODO: 这里就是对不同雷达做处理的部分
             preprocess_->Process(msg, cloud);
 
             lidar_buffer_.push_back(cloud);

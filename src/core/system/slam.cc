@@ -93,6 +93,7 @@ bool SlamSystem::Init(const std::string& yaml_path) {
 
         imu_sub_ = node_->create_subscription<sensor_msgs::msg::Imu>(
             imu_topic_, qos, [this](sensor_msgs::msg::Imu::SharedPtr msg) {
+                // (imu 处理过程)step1: 接收ros格式imu数据，转换时间戳更改为s，数据格式转换为专有类型
                 IMUPtr imu = std::make_shared<IMU>();
                 imu->timestamp = ToSec(msg->header.stamp);
                 imu->linear_acceleration =
@@ -235,6 +236,7 @@ void SlamSystem::ProcessIMU(const lightning::IMUPtr& imu) {
     if (running_ == false) {
         return;
     }
+    // （imu处理过程）step2: imu未初始化前仅存储队列；初始化后位姿预测并存储队列
     lio_->ProcessIMU(imu);
 }
 
@@ -243,7 +245,10 @@ void SlamSystem::ProcessLidar(const sensor_msgs::msg::PointCloud2::SharedPtr& cl
         return;
     }
 
+    // （Lidar处理过程）step1:
+    // 接收雷达点云，将时间戳转换为s，同时采用激光预处理模块将ros格式激光转换为pcl格式，并将时间和点云均存在队列中
     lio_->ProcessPointCloud2(cloud);
+    // （Lidar处理过程）step2: 真正用于处理传感器队列的部分
     lio_->Run();
 
     auto kf = lio_->GetKeyframe();

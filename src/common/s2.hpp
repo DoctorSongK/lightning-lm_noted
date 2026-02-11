@@ -61,28 +61,34 @@ struct S2 {
      * S2_Mx: the partial derivative of x.boxplus(u) w.r.t. u
      */
     // 数学公式推导：
-    // 恒等式公式：R·x^·R.Trans() = [Rx]^
+    // 恒等式公式(伴随性质）：R·x^·R.Trans() = [Rx]^
     //            R·x^ = [Rx]^·R
+    // 交换叉乘顺序：a x b = -b x a
     // 对应：如果输入量delta变大一点点，输出的状态vec_会怎么变
 
     /**
      *  给出计算公式：f(u) = exp(u^)x  式中u为旋转向量
      *  情况一：
      *  当△较小时可以直接用泰勒展开
-     *  f(u + △) = exp(u^)x
+     *  x_new = exp(B_x * △)x   w = B_x * △  需要注意的是exp不是真正的exp，而是李群李代数的内容
+     *  当w足够小时，旋转矩阵exp(w)可做泰勒展开：exp(w) = I + w^
+     *  代入公式可得 x_new = (I + w^)x = x + w^x = x - x^w = x - x^ · B_x · △
+     *              x_new - x = -x^ · B_x · △
+     *  进而偏导方程求得结果为 -x^ · B_x
+     *  情况二：
      *  这个旋转向量就是李代数
-     *  关于雅克比矩阵的推导过程（扰动法）
-     *
-     *
-     *  step1: f(u + △) = exp[(u+△)^]x
-     *
-     *
-     *
-     *
-     *
-     *
-     *
-     *
+     *  关于雅克比矩阵的推导过程（扰动法）对u求偏导
+     *  step1: 做扰动后f(u + △) = exp[(u+△)^]x
+     *  step2: 应用BCH公式后 exp[(u+△)^]x = exp(u^)exp((Jr(u)△)^)x
+     *         由于扰动量是个小量，所以可以对后面增量做泰勒展开  exp[(u+△)^]x = exp(u^)[I + (Jr(u)△)^]x
+     *                                                                     = exp(u^)x + exp(u^)·(Jr(u)△)^x
+     *         利用上面的交换叉乘顺序特性                                    = exp(u^)x - exp(u^)·x^(Jr(u)△)
+     *         利用上面的恒等式公式                                          = exp(u^)x - [Rx]^·R ·(Jr(u)△)
+     *         左雅克比和右雅克比存在关系（J_L = R·J_R)                       = exp(u^)x - [Rx]^Jl(u)△
+     *                                                                     = x_old - [Rx]^Jl(u)△
+     *         同时利用另一性质J_L.Transpose = J_R和伴随矩阵                  = x_old - R · x^ · R.Transpose · Jl(u)△
+     *                                                                     = x_old - R · x^ · J△
+     *  step3: 由于是对u求偏导，实际还要u对delta求偏导，即Bx
      */
     Eigen::Matrix<double, 3, 2> S2_Mx(const Eigen::Matrix<double, 2, 1> &delta) const {
         Eigen::Matrix<double, 3, 2> res;
@@ -170,10 +176,12 @@ struct S2 {
      * S2_Nx: the partial derivative of x.boxminus(y) w.r.t. x, where x and y belong to S2
      * S2_Nx_yy: simplified S2_Nx when x is equal to y
      */
-    // 计算误差函数相对于状态的雅克比
+    // 计算误差函数相对于状态的雅克比(根据下面广义减的公式推导而来)
     Eigen::Matrix<double, 2, 3> S2_Nx_yy() const {
         Eigen::Matrix<double, 2, 3> res;
         Eigen::Matrix<double, 3, 2> Bx = S2_Bx();
+        // 为什么这里除了length的平方，是因为原重力向量 叉乘 当前重力向量的新向量模长为theta * Length *
+        // Length，为了仅考量theta的影响，所以要去掉Length * Length
         res = 1 / length_ / length_ * Bx.transpose() * SO3::hat(vec_);
         return res;
     }

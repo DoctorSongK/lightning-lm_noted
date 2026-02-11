@@ -35,7 +35,8 @@ class PointCloudPreprocess {
 
     void Set(LidarType lid_type, double bld, int pfilt_num);
 
-    // accessors（访问器）
+    // accessors（访问器），以为是什么高大上的东西，哈哈哈，其实指用来读取或获取对象内部数据的方法
+    ///@brief 盲区是多少
     double &Blind() { return blind_; }
     int &NumScans() { return num_scans_; }
     int &PointFilterNum() { return point_filter_num_; }

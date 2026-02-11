@@ -154,7 +154,8 @@ inline void ImuProcess::IMUInit(const MeasureGroup &meas, ESKF &kf_state, int &N
     // 误解：以为函数GetX返回的是常量引用，而等于号也应该是常量引用，实则不然，此时发生了拷贝构造，init_state是另一变量；但是如果ini_state定义为NavState&就不行啦
     auto init_state = kf_state.GetX();
     init_state.timestamp_ = meas.imu_.back()->timestamp;
-    init_state.grav_ = S2(-mean_acc_ / mean_acc_.norm() * G_m_s2);  // 初始加速度值为
+    init_state.grav_ = S2(-mean_acc_ / mean_acc_.norm() *
+                          G_m_s2);  // 初始加速度值为-9.8，为什么要为负值呢，因为要保证机器人静止时加速为0
     init_state.bg_ = mean_gyr_;
     init_state.offset_t_lidar_ = t_lidar_mu_;
     init_state.offset_R_lidar_ = R_lidar_imu_;

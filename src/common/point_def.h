@@ -22,6 +22,15 @@ struct PointXYZIT {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
+/**
+作用：构建PCL中变量与ros中变量的映射表
+POINT_CLOUD_REGISTER_POINT_STRUCT(MyPointType,
+    // 参数1：C++类型
+    // 参数2：C++结构体里的成员变量名（给自己代码用的）
+    // 参数3：ROS消息里的字段名（必须匹配 rostopic echo！）
+    (double,  my_cpp_time,  "timestamp")
+)
+*/
 POINT_CLOUD_REGISTER_POINT_STRUCT(PointXYZIT,
                                   (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(double, time,
                                                                                                        timestamp))

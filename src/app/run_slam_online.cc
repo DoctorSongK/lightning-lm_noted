@@ -33,6 +33,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    // TODO: 这边要写服务用于开启建图程序，同时要提供结束地图的接口内容
     slam.StartSLAM("new_map");
     slam.Spin();
 

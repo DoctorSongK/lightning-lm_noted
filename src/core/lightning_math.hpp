@@ -295,7 +295,8 @@ inline Eigen::Matrix<double, 2, 3> PseudoInverse(const Eigen::Matrix<double, 3, 
 
 /**
  * SO3 Jl()/JacobianL()
- * @brief 左雅克比矩阵
+ * @brief 左雅克比矩阵，对应网上找到的公式，和视觉SLAM14讲中不一样
+ * J_L = I + [(1 - cos(|w|))/(|w| * |w|)] * w^ + [(|w| -sin(|w|))/(|w| * |w| * |w|)] * w^ * w^
  * @param v
  * @return
  */

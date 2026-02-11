@@ -106,7 +106,7 @@ void PointCloudPreprocess::Oust64Handler(const sensor_msgs::msg::PointCloud2::Sh
         added_pt.y = pl_orig.points[i].y;
         added_pt.z = pl_orig.points[i].z;
         added_pt.intensity = pl_orig.points[i].intensity;
-        added_pt.time = pl_orig.points[i].t / 1e6;  // curvature unit: ms
+        added_pt.time = pl_orig.points[i].t / 1e6;  // curvature unit: ms 曲率单位
 
         cloud_out_.points.push_back(added_pt);
     }
