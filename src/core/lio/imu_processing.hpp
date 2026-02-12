@@ -134,18 +134,18 @@ inline void ImuProcess::IMUInit(const MeasureGroup &meas, ESKF &kf_state, int &N
         cur_acc = imu_acc;
         cur_gyr = gyr_acc;
 
-        mean_acc_ += (cur_acc - mean_acc_) / N;
-        mean_gyr_ += (cur_gyr - mean_gyr_) / N;
+        mean_acc_ += (cur_acc - mean_acc_) / N;  // 对应ba
+        mean_gyr_ += (cur_gyr - mean_gyr_) / N;  // 对应bg
 
         // cwiseProduct(Coefficient-wise Product  哈达玛积) --> 用于点对点的乘法，而不是矩阵乘法
         // 输入可以是向量也可以矩阵
         // 例如：[1, 2, 3] [2, 3, 4] -> -> 输出结果：[1*2, 2*3, 3*4]
         // TODO: 高翔这边代码应该是错误的，关于协方差的递推中的mean_gyr_应该是没有更新过的，现在是更新的就不正确
         // 另外协方差所除的样本个数为N，而不是N-1
-        cov_acc_ =
-            cov_acc_ * (N - 1.0) / N + (cur_acc - mean_acc_).cwiseProduct(cur_acc - mean_acc_) * (N - 1.0) / (N * N);
-        cov_gyr_ =
-            cov_gyr_ * (N - 1.0) / N + (cur_gyr - mean_gyr_).cwiseProduct(cur_gyr - mean_gyr_) * (N - 1.0) / (N * N);
+        cov_acc_ = cov_acc_ * (N - 1.0) / N +
+                   (cur_acc - mean_acc_).cwiseProduct(cur_acc - mean_acc_) * (N - 1.0) / (N * N);  // 对应Qa
+        cov_gyr_ = cov_gyr_ * (N - 1.0) / N +
+                   (cur_gyr - mean_gyr_).cwiseProduct(cur_gyr - mean_gyr_) * (N - 1.0) / (N * N);  // 对应Qg
 
         N++;
     }
@@ -176,6 +176,7 @@ inline void ImuProcess::IMUInit(const MeasureGroup &meas, ESKF &kf_state, int &N
 
 inline void ImuProcess::UndistortPcl(const MeasureGroup &meas, ESKF &kf_state, CloudPtr &pcl_out) {
     /*** add the imu_ of the last frame-tail to the of current frame-head ***/
+    // 将上一帧的imu压入当前imu序列
     auto v_imu = meas.imu_;
     v_imu.push_front(last_imu_);
     const double &imu_end_time = v_imu.back()->timestamp;
@@ -186,6 +187,7 @@ inline void ImuProcess::UndistortPcl(const MeasureGroup &meas, ESKF &kf_state, C
     /*** Initialize IMU pose ***/
     auto imu_state = kf_state.GetX();
     imu_pose_.clear();
+    // 加速度、角速度、速度、位置、姿态
     imu_pose_.emplace_back(0.0, acc_s_last_, angvel_last_, imu_state.vel_, imu_state.pos_, imu_state.rot_.matrix());
 
     /*** forward propagation at each imu_ point ***/
@@ -196,7 +198,10 @@ inline void ImuProcess::UndistortPcl(const MeasureGroup &meas, ESKF &kf_state, C
     Vec3d acc = Vec3d::Zero();
     Vec3d gyro = Vec3d::Zero();
 
+    // QUES: 最后一个imu不算？
     for (auto it_imu = v_imu.begin(); it_imu < (v_imu.end() - 1); it_imu++) {
+        // auto + && = "完美引用"（完美转发）
+        // 遇左值就是左值，遇右值就是右值
         auto &&head = *(it_imu);
         auto &&tail = *(it_imu + 1);
 
@@ -312,6 +317,7 @@ inline void ImuProcess::Process(const MeasureGroup &meas, ESKF &kf_state, CloudP
 
     if (imu_need_init_) {
         /// The very first lidar frame
+        // （前向传播）step1: 做imu的零偏估算
         IMUInit(meas, kf_state, init_iter_num_);
 
         imu_need_init_ = true;
@@ -319,10 +325,12 @@ inline void ImuProcess::Process(const MeasureGroup &meas, ESKF &kf_state, CloudP
         last_imu_ = meas.imu_.back();
 
         auto imu_state = kf_state.GetX();
+        // 需要初始化20次，计算ba bg等，此时对应的激光点也都不要啦
         if (init_iter_num_ > max_init_count_) {
             cov_acc_ *= pow(G_m_s2 / mean_acc_.norm(), 2);
             imu_need_init_ = false;
 
+            // 这不上面的计算没啥意义，直接是读取的配置中协方差（注意这是加速度和角速度的协方差，不是两个零偏的协方差）
             cov_acc_ = cov_acc_scale_;
             cov_gyr_ = cov_gyr_scale_;
             LOG(INFO) << "imu init done, bg: " << imu_state.bg_.transpose() << ", ba: " << imu_state.ba_.transpose();
@@ -333,6 +341,7 @@ inline void ImuProcess::Process(const MeasureGroup &meas, ESKF &kf_state, CloudP
         return;
     }
 
+    // (前向传播) step2: 利用imu积分去畸变
     Timer::Evaluate([&, this]() { UndistortPcl(meas, kf_state, scan); }, "Undistort Pcl");
 }
 }  // namespace lightning

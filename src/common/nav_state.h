@@ -192,7 +192,7 @@ struct NavState {
     bool is_parking_ = false;          // 是否在停车
 
     Vec3d pos_ = Vec3d::Zero();             // 位置
-    SO3 rot_;                               // 旋转
+    SO3 rot_;                               // 旋转 默认构造，即角度为0
     SO3 offset_R_lidar_;                    // 外参R
     Vec3d offset_t_lidar_ = Vec3d::Zero();  // 外参t
     Vec3d vel_ = Vec3d::Zero();             // 速度

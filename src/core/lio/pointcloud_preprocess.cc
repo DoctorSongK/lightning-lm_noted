@@ -20,7 +20,7 @@ void PointCloudPreprocess::Process(const sensor_msgs::msg::PointCloud2 ::SharedP
         case LidarType::VELO32:
             VelodyneHandler(msg);
             break;
-
+        // TODO: 增加速腾激光雷达的处理
         default:
             LOG(ERROR) << "Error LiDAR Type";
             break;
@@ -106,6 +106,7 @@ void PointCloudPreprocess::Oust64Handler(const sensor_msgs::msg::PointCloud2::Sh
         added_pt.y = pl_orig.points[i].y;
         added_pt.z = pl_orig.points[i].z;
         added_pt.intensity = pl_orig.points[i].intensity;
+        // 为什么要在这里除1e6呢，因为正常fromROSMsg转换后的激光点都是ns，这边将其转成了ms
         added_pt.time = pl_orig.points[i].t / 1e6;  // curvature unit: ms 曲率单位
 
         cloud_out_.points.push_back(added_pt);
@@ -116,6 +117,7 @@ void PointCloudPreprocess::Oust64Handler(const sensor_msgs::msg::PointCloud2::Sh
     cloud_out_.is_dense = false;
 }
 
+// 个人猜测为什么velodyne的处理方式不同，是因为velodyne是机械雷达，然后扫描是有顺序周期的
 void PointCloudPreprocess::VelodyneHandler(const sensor_msgs::msg::PointCloud2::SharedPtr &msg) {
     cloud_out_.clear();
     cloud_full_.clear();
@@ -134,10 +136,11 @@ void PointCloudPreprocess::VelodyneHandler(const sensor_msgs::msg::PointCloud2::
     /*****************************************************************/
 
     // 计算水平激光的射入和射出角度
-    // 只处理时间戳没有偏移的点云，有偏移的直接去除
+    // 理论上激光雷达第一个点的offset_time为0，后面为累加
     if (pl_orig.points[plsize - 1].time > 0) {
         given_offset_time_ = true;
     } else {
+        // 如果非第一个点offset_time为0，后累加的数据格式，则重新将雷达规范成该格式
         given_offset_time_ = false;
         // 57.29是180/PI,下面将弧度制转换为角度制
         double yaw_first = atan2(pl_orig.points[0].y, pl_orig.points[0].x) * 57.29578;
@@ -158,8 +161,10 @@ void PointCloudPreprocess::VelodyneHandler(const sensor_msgs::msg::PointCloud2::
         added_pt.y = pl_orig.points[i].y;
         added_pt.z = pl_orig.points[i].z;
         added_pt.intensity = pl_orig.points[i].intensity;
+        // QUES: 这个velodyne传进来的offset是us吗，这个后面需验证一下
         added_pt.time = pl_orig.points[i].time * time_scale_;  // curvature unit: ms
 
+        // 如果没有发生激光点时间偏移的话，就是直接读取的velodyne的内容
         if (!given_offset_time_) {
             int layer = pl_orig.points[i].ring;
             double yaw_angle = atan2(added_pt.y, added_pt.x) * 57.2957;

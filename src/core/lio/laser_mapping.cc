@@ -147,12 +147,15 @@ void LaserMapping::ProcessIMU(const lightning::IMUPtr &imu) {
     imu_buffer_.emplace_back(imu);
 }
 
+/// @brief lio关键主函数
+/// @return
 bool LaserMapping::Run() {
     if (!SyncPackages()) {
         return false;
     }
 
     /// IMU process, kf prediction, undistortion
+    // (主任务)step1：完成imu零偏计算后，做积分去畸变操作
     p_imu_->Process(measures_, kf_, scan_undistort_);
 
     if (scan_undistort_->empty() || (scan_undistort_ == nullptr)) {
@@ -378,6 +381,11 @@ void LaserMapping::ProcessPointCloud2(CloudPtr cloud) {
         "Preprocess (Standard)");
 }
 
+// QUES:
+// 感觉传感器处理有点不实时。可能发生的案例有：imu驱动较晚时，lidar_buffer中已经累积了多个lidar数据，而这边只考虑处理最早的一个点云，但是找不到合适的imu就会一直等待
+// 还一个案例是，当lidar驱动较晚时，会读取所有imu数据到measure。也许这个代码就要求硬同步，但是自己用要更改适配
+/// @brief 数据同步，感觉有点不实时
+/// @return
 bool LaserMapping::SyncPackages() {
     if (lidar_buffer_.empty() || imu_buffer_.empty()) {
         return false;
@@ -392,6 +400,7 @@ bool LaserMapping::SyncPackages() {
             LOG(WARNING) << "Too few input point cloud!";
             lidar_end_time_ = measures_.lidar_begin_time_ + lidar_mean_scantime_;
         } else if (measures_.scan_->points.back().time / double(1000) < 0.5 * lidar_mean_scantime_) {
+            // 为什么这里除了一个1000呢，因为所有雷达的处理过程都将offset_time的单位限制在了ms
             lidar_end_time_ = measures_.lidar_begin_time_ + lidar_mean_scantime_;
         } else {
             scan_num_++;
@@ -406,6 +415,7 @@ bool LaserMapping::SyncPackages() {
         lidar_pushed_ = true;
     }
 
+    // QUES: 如果先有雷达后有imu的话，理论上就会一直返回
     if (last_timestamp_imu_ < lidar_end_time_) {
         return false;
     }

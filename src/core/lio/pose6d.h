@@ -9,6 +9,10 @@
 
 namespace lightning {
 
+/**
+ * @brief 容器：包含加速度、角速度、速度、位置、姿态
+ *
+ */
 struct Pose6D {
     Pose6D() = default;
 

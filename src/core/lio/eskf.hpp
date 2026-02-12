@@ -74,7 +74,7 @@ class ESKF {
         bool use_aa_ = false;  // use anderson accleration
     };
 
-    /// 初始化
+    /// @brief 参数初始化和观测接收函数设定
     void Init(Options options) {
         lidar_obs_func_ = options.lidar_obs_func_;
         wheelspeed_obs_func_ = options.wheelspeed_obs_func_;
