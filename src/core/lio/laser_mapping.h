@@ -201,8 +201,8 @@ class LaserMapping {
     ///////////////////////// EKF inputs and output ///////////////////////////////////////////////////////
     MeasureGroup measures_;  // sync IMU and lidar scan
 
-    ESKF kf_;      // 点云时刻的IMU状态
-    ESKF kf_imu_;  // imu 最新时刻的eskf状态
+    ESKF kf_;  // 点云时刻的IMU状态
+    ESKF kf_imu_;  // imu 最新时刻的eskf状态，只要来了imu信息就累积，与激光没关系（纯惯导内容）
 
     NavState state_point_;  // ekf current state
 

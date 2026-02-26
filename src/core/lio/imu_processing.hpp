@@ -198,22 +198,37 @@ inline void ImuProcess::UndistortPcl(const MeasureGroup &meas, ESKF &kf_state, C
     Vec3d acc = Vec3d::Zero();
     Vec3d gyro = Vec3d::Zero();
 
-    // QUES: 最后一个imu不算？
+    // QUES: 最后一个imu不算？ 是不是因为把上一次测量的last_imu加入了，本次队列的就不处理
     for (auto it_imu = v_imu.begin(); it_imu < (v_imu.end() - 1); it_imu++) {
         // auto + && = "完美引用"（完美转发）
         // 遇左值就是左值，遇右值就是右值
         auto &&head = *(it_imu);
         auto &&tail = *(it_imu + 1);
 
+        /**
+         * QUES: 如果激光雷达点云异常的话，meas.lidar_end_time_会自动补充
+         *
+         * last_lidar_end_time # 上一时刻激光旋转一圈后的时间
+         * imu                 .
+         * cur_point_cloud     o
+         *     #          o  #
+         * ....................
+         *     |->
+         */
+
+        // 若两个imu数据都比上一时刻雷达时间小的话，就直接抛弃该数据
         if (tail->timestamp < last_lidar_end_time_) {
             continue;
         }
 
+        // 采用中值计算
         angvel_avr = .5 * (head->angular_velocity + tail->angular_velocity);
         acc_avr = .5 * (head->linear_acceleration + tail->linear_acceleration);
 
+        // 这里用于单位校准，理论上静止就是9.8，但是由于所处位置倾斜或者单位不同，来标准化一下，保证后面计算正确
         acc_avr = acc_avr * G_m_s2 / mean_acc_.norm();  // - state_inout.ba;
 
+        // 若两个imu数据时间段正好把last_lidar_end_time包含在中间，则dt = 尾 - last_lidar_end_time
         if (head->timestamp < last_lidar_end_time_) {
             dt = tail->timestamp - last_lidar_end_time_;
         } else {
@@ -254,7 +269,12 @@ inline void ImuProcess::UndistortPcl(const MeasureGroup &meas, ESKF &kf_state, C
     }
 
     /*** calculated the pos and attitude prediction at the frame-end ***/
+    // 在帧末计算位置和姿态预测，这里采用的是上一帧的数据，而没有采用最新的，另外时间也是算到了最新的时间上（无论是激光还是imu），但是位姿没有输出到imu_pose
+
+    // 理论上来讲imu_end_time 只会小于等于 pcl_end_time
     double note = pcl_end_time > imu_end_time ? 1.0 : -1.0;
+
+    // 没有imu数据时以measure队列中最新的imu数据外推
     dt = note * (pcl_end_time - imu_end_time);
     kf_state.Predict(dt, Q_, gyro, acc);
 
@@ -268,6 +288,7 @@ inline void ImuProcess::UndistortPcl(const MeasureGroup &meas, ESKF &kf_state, C
               [](const PointType &p1, const PointType &p2) { return p1.time < p2.time; });
 
     /*** undistort each lidar point (backward propagation) ***/
+    // 对每个激光雷达点进行去畸变（反向传播）
     if (pcl_out->empty()) {
         return;
     }

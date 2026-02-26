@@ -6,11 +6,20 @@
 
 namespace lightning {
 
+/**
+ * @brief
+ *
+ * @param dt 积分时间
+ * @param Q 陀螺仪噪声矩阵
+ * @param gyro 角速度输入
+ * @param acce 加速度输入
+ */
 void ESKF::Predict(const double& dt, const ESKF::ProcessNoiseType& Q, const Vec3d& gyro, const Vec3d& acce) {
+    // (ESKF) step1: 名义状态下imu积分递推
     Eigen::Matrix<double, 24, 1> f_ = x_.get_f(gyro, acce);  // 调用get_f 获取 速度 角速度 加速度
-    Eigen::Matrix<double, 24, 23> f_x_ = x_.df_dx(acce);
+    Eigen::Matrix<double, 24, 23> f_x_ = x_.df_dx(acce);     // 名义变量对状态量的求导
 
-    Eigen::Matrix<double, 24, 12> f_w_ = x_.df_dw();
+    Eigen::Matrix<double, 24, 12> f_w_ = x_.df_dw();  //
     Eigen::Matrix<double, 23, process_noise_dim_> f_w_final;
 
     NavState x_before = x_;
@@ -50,6 +59,13 @@ void ESKF::Predict(const double& dt, const ESKF::ProcessNoiseType& Q, const Vec3
         F_x1_.block<3, 3>(idx, idx) = math::exp(seg_SO3, 0.5).matrix();
 
         res_temp_SO3 = math::A_matrix(seg_SO3);
+        // 什么时候会用这个template呢
+        /**
+         * c++ .template消除歧义符
+         * 为什么使用：编译器在编译代码时，不知道成员函数为模板函数，会解析错误
+         * 使用环境：当访问一个对象的成员函数时，而这个对象的类型是不确定的，而且要调用的这个成员函数本身也是模板函数（在模板函数里调用另一个模板函数）
+         *
+         */
         for (int i = 0; i < state_dim_; i++) {
             f_x_final.template block<3, 1>(idx, i) = res_temp_SO3 * (f_x_.block<3, 1>(dim, i));
         }
@@ -59,6 +75,7 @@ void ESKF::Predict(const double& dt, const ESKF::ProcessNoiseType& Q, const Vec3
         }
     }
 
+    // 关于重力向量的变化，关于这方面的推导，公式中未提及（应该是高翔自己加的），后面自己推导一下
     Eigen::Matrix<double, 2, 3> res_temp_S2;
     Vec3d seg_S2;
     for (auto st : x_.S2_states_) {
@@ -88,7 +105,8 @@ void ESKF::Predict(const double& dt, const ESKF::ProcessNoiseType& Q, const Vec3
     }
 
     F_x1_ += f_x_final * dt;
-    P_ = (F_x1_)*P_ * (F_x1_).transpose() + (dt * f_w_final) * Q * (dt * f_w_final).transpose();
+    P_ = (F_x1_)*P_ * (F_x1_).transpose() +
+         (dt * f_w_final) * Q * (dt * f_w_final).transpose();  // 对应fast_lio中预测的公式
 }
 
 /**
@@ -165,8 +183,9 @@ void ESKF::Update(ESKF::ObsType obs, const double& R) {
         P_ = P_propagated;
 
         /// 更新P 和 dx
-        /// P = J*P*J^T
-        /// dx = J * dx
+        /// P = J*P*J^T（对应自动驾驶与机器人中的SLAM技术中的公式8.6），
+        /// 其中J是增量值的右雅克比矩阵，详看自动驾驶与机器人中的SLAM技术中的3.61及手动推导部分
+        /// dx = J * dx 这个对应fast_lio课件中的公式19 J.inv * dx
         for (auto it : x_.SO3_states_) {
             int idx = it.idx_;
             Vec3d seg_SO3 = dx.block<3, 1>(idx, 0);
@@ -206,15 +225,19 @@ void ESKF::Update(ESKF::ObsType obs, const double& R) {
 
         /// 处理各类观测模型
         if (state_dim_ > dof_measurement) {
+            // 这里使用最传统的ESKF中增益计算方式
             Eigen::MatrixXd h_x_cur = Eigen::MatrixXd::Zero(dof_measurement, state_dim_);
             h_x_cur.topLeftCorner(dof_measurement, 12) = custom_obs_model_.h_x_;
             custom_obs_model_.R_ = R * Eigen::MatrixXd::Identity(dof_measurement, dof_measurement);
 
+            // NOTE: 常规ESKF的增益计算（自动驾驶与机器人中的SLAM技术公式3.5.1a 和 fast_lio课件公式18
             Eigen::MatrixXd K =
                 P_ * h_x_cur.transpose() * (h_x_cur * P_ * h_x_cur.transpose() + custom_obs_model_.R_).inverse();
             K_r = K * custom_obs_model_.residual_;
             K_H = K * h_x_cur;
         } else {
+            /// 这里是针对将雷达误差迭代过程融入IESKF中后，误差函数维度与激光点相关，维度过高计算复杂而优化的ESKF增益计算
+            /// 这里的K对应fast_lio课件中的公式36
             /// 纯雷达观测
             double R_inv = 1.0 / (R * dof_measurement);
 
@@ -222,7 +245,7 @@ void ESKF::Update(ESKF::ObsType obs, const double& R) {
             Eigen::Matrix<double, 12, 12> HTH = custom_obs_model_.h_x_.transpose() * custom_obs_model_.h_x_;
 
             CovType P_temp = (P_ / R).inverse();  // P阵上面已经更新
-            P_temp.block<12, 12>(0, 0) += HTH;    // Q in (38)
+            P_temp.block<12, 12>(0, 0) += HTH;    // Q in (38) 对应公式36中的(H.Trans * R.inv * H + P.inv)
             CovType Q_inv = P_temp.inverse();     // Q inv
 
             // Q*H^T * R^-1 * r = K * r
@@ -236,7 +259,8 @@ void ESKF::Update(ESKF::ObsType obs, const double& R) {
         }
 
         // dx = Kr + (KH-I) dx
-        dx_current = K_r + (K_H - Eigen::Matrix<double, 23, 23>::Identity()) * dx_current;
+        dx_current = K_r + (K_H - Eigen::Matrix<double, 23, 23>::Identity()) *
+                               dx_current;  // fast_lio中的公式35 不知道为啥差个负号
 
         // check nan
         for (int j = 0; j < 23; ++j) {
@@ -296,6 +320,7 @@ void ESKF::Update(ESKF::ObsType obs, const double& R) {
 
                 res_temp_SO3 = math::A_matrix(seg_SO3).transpose();
                 for (int j = 0; j < 23; j++) {
+                    // block<3, 1>(idx, j) 指从idx, j开始截取3行1列
                     L_.block<3, 1>(idx, j) = res_temp_SO3 * (P_.block<3, 1>(idx, j));
                 }
 
@@ -336,6 +361,11 @@ void ESKF::Update(ESKF::ObsType obs, const double& R) {
                 }
             }
 
+            // 与自动驾驶与机器人中的SLAM技术中8.8完全一致 P_k+1 = (I - K_k·H_k)J_k · P_pred · J_k.trans
+            // 公式展开为 J_k · P_pred · J_k.trans - K_k·H_k·J_k · P_pred · J_k.trans
+            // 这里L_是J_k · P_pred · J_k.trans
+            // 这里P_是P_pred · J_k.trans
+            // 下式中的K_H已做了处理，为K_k·H_k·J_k
             P_ = L_ - K_H.block<23, 15>(0, 0) * P_.template block<15, 23>(0, 0);
 
             break;

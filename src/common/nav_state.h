@@ -20,6 +20,12 @@ namespace lightning {
  * 3*7+2 = 23维
  * S2写成矢量的话24维
  */
+/**
+ * 数学知识补充：
+ * 左乘：相对世界坐标系变换。不管物体现在头朝哪，相对于地球转多少
+ * 右乘：相对于自身坐标系
+ *
+ * */
 struct NavState {
     constexpr static int dim = 23;       //  状态变量维度
     constexpr static int full_dim = 24;  // 误差变量维度
@@ -101,6 +107,8 @@ struct NavState {
 
     /// 递推
     /// QUES: 这边是不是导数
+    // Eigen::middleRows(i,n) 其中i（index)表示起始行的索引（从0开始计数），n（Count）要选取的行数
+    // middleRows<N>(i) 从索引i开始，选取N行（N是编译器常量）
     void oplus(const FullVectState& vec, double dt) {
         timestamp_ += dt;
         pos_ += vec.middleRows(0, 3) * dt;
@@ -153,7 +161,9 @@ struct NavState {
         return ret;
     }
 
-    /// 各个子变量所在维度信息
+    /// 各个子变量所在维度信息（元信息）
+    /// @brief
+    /// 最简单的理解方式，关于什么索引、维度、自由度有些许模糊人，实际作用就是对应雅克比矩阵或者协方差矩阵中的行、列、深度
     struct MetaInfo {
         MetaInfo(int idx, int vdim, int dof) : idx_(idx), dim_(vdim), dof_(dof) {}
         int idx_ = 0;  // 变量所在索引

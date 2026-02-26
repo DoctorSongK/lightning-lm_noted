@@ -236,7 +236,7 @@ void SlamSystem::ProcessIMU(const lightning::IMUPtr& imu) {
     if (running_ == false) {
         return;
     }
-    // （imu处理过程）step2: imu未初始化前仅存储队列；初始化后位姿预测并存储队列
+    // （imu处理过程）step2: imu未初始化前仅存储队列；初始化后做逐帧位姿预测计算并存储队列
     lio_->ProcessIMU(imu);
 }
 

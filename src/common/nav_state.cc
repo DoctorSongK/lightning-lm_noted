@@ -7,6 +7,7 @@
 namespace lightning {
 /// 矢量变量的维度
 const std::vector<NavState::MetaInfo> NavState::vect_states_{
+    // 索引idx 维度dim 自由度dof
     {0, 0, 3},    // pos
     {9, 9, 3},    // offset t
     {12, 12, 3},  // vel

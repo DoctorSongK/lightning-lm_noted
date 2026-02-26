@@ -54,6 +54,7 @@ class ESKF {
         Eigen::Matrix<double, Eigen::Dynamic, 1> residual_;          // residual: z-Hx
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> h_x_;  // dr/dx, H阵
         Eigen::Matrix<double, Eigen::Dynamic, 1> s_;
+        /// @brief 这里的R是观测噪声
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> R_;
 
         double lidar_residual_mean_ = 0;

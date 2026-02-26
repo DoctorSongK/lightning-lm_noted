@@ -415,12 +415,14 @@ bool LaserMapping::SyncPackages() {
         lidar_pushed_ = true;
     }
 
-    // QUES: 如果先有雷达后有imu的话，理论上就会一直返回
+    // 如果imu的时间段无法覆盖雷达的时间就退出
     if (last_timestamp_imu_ < lidar_end_time_) {
         return false;
     }
 
     /*** push imu_ data, and pop from imu_ buffer ***/
+    // 这里解决了如果先有的lidar, 后有的imu时，就会抛弃原有雷达内容，保留imu信息，直到找到合适的雷达点云
+    // NOTE: imu的时间绝对不会大于lidar_end_time，就是小于等于
     double imu_time = imu_buffer_.front()->timestamp;
     measures_.imu_.clear();
     while ((!imu_buffer_.empty()) && (imu_time < lidar_end_time_)) {
