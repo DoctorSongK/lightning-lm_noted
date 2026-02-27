@@ -303,6 +303,7 @@ inline void ImuProcess::UndistortPcl(const MeasureGroup &meas, ESKF &kf_state, C
         acc_imu = (tail->acc);
         angvel_avr = (tail->gyr);
 
+        // 将每个点的采集时间，全部投影到扫描结束那一刻的雷达坐标系下，后期转换全局坐标系时也是基于扫描结束那一刻的雷达坐标系下转换的
         for (; it_pcl->time / double(1000) > head->offset_time; it_pcl--) {
             dt = it_pcl->time / double(1000) - head->offset_time;
 
@@ -314,6 +315,21 @@ inline void ImuProcess::UndistortPcl(const MeasureGroup &meas, ESKF &kf_state, C
 
             Vec3d P_i(it_pcl->x, it_pcl->y, it_pcl->z);
             Vec3d T_ei(pos_imu + vel_imu * dt + 0.5 * acc_imu * dt * dt - imu_state.pos_);
+            /**
+             * 推导流程
+             * step1 计算T_W_P_C(指定时刻激光点相对世界坐标系的位姿) = R_i * (imu_state.offset_R_lidar_ * P_i +
+             * imu_state.offset_t_lidar_) + T_i step2 求取T_I_P(指定时刻)_E(指定时刻激光点相对end时刻IMU坐标系的位姿)
+             *       已知T_W_I(end时刻)
+             *       T_ei_pc = T_w_pc * (T_w_ie).inv
+             *
+             * 已知 p_i = R * P_j + T 这是正向推导
+             *      p_j = R.inv * (P_i - T)
+             *
+             * 结合上面这些内容的话
+             * T_ei_pc = R_e.inv * [R_i * (imu_state.offset_R_lidar_ * P_i + imu_state.offset_t_lidar_) + T_i - T_e]
+             *
+             * 最后再转换成end时刻lidar坐标系
+             */
             Vec3d p_compensate = imu_state.offset_R_lidar_.inverse() *
                                  (imu_state.rot_.inverse() *
                                       (R_i * (imu_state.offset_R_lidar_ * P_i + imu_state.offset_t_lidar_) + T_ei) -
