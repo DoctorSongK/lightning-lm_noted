@@ -172,6 +172,7 @@ bool LaserMapping::Run() {
         for (int i = 0; i < scan_undistort_->size(); i++) {
             PointBodyToWorld(scan_undistort_->points[i], scan_down_world_->points[i]);
         }
+        // 往local_map中加入的是未体素滤波的世界坐标系点云
         ivox_->AddPoints(scan_down_world_->points);
 
         first_lidar_time_ = measures_.lidar_end_time_;
@@ -446,6 +447,7 @@ bool LaserMapping::SyncPackages() {
     return true;
 }
 
+// 输入激光点云为scan_down_body_（下采样后的Lidar坐标系的点云）
 void LaserMapping::MapIncremental() {
     PointVector points_to_add;
     PointVector point_no_need_downsample;
@@ -527,6 +529,10 @@ void LaserMapping::ObsModel(NavState &s, ESKF::CustomObservationModel &obs) {
 
     Timer::Evaluate(
         [&, this]() {
+            /**
+             * @brief
+             *
+             */
             auto R_wl = (s.rot_ * s.offset_R_lidar_).cast<float>();
             auto t_wl = (s.rot_ * s.offset_t_lidar_ + s.pos_).cast<float>();
 

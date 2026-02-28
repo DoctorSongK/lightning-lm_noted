@@ -1,6 +1,11 @@
 //
 // Created by xiang on 2021/9/16.
-//
+// @brief ivox是个大体素，相当于往local_map中不停地塞入体素内容
+// 关于为什么使用ivox呢，这是高翔大佬提出的新方法，在lio的计算过程中，总想根据机器人维护一个local_mapping。而local_mapping常规操作是做过8叉树或者空间栅格，但是对于
+// 空旷环境很多体素或者空间栅格内会浪费甚至很多体素里啥东西都没有，但还需要维护，这就浪费了内存；
+// ivox引入hash来记录key和node，知乎上说空间hash很少会有hash冲突，所以这个也就具备了一致性
+// IvoxNode和IvoxNodePhc是体素内再次做分割的小单元内容
+// 为什么还要做小单元呢，为了找最近邻，当点少时可以暴力遍历，当点过多时论文中引入了PHC（伪希尔伯特空间填充曲线）来解决暴力匹配的问题（似乎用处并不大）
 #pragma once
 
 #include <glog/logging.h>
@@ -39,6 +44,8 @@ class IVox {
    public:
     using KeyType = Eigen::Matrix<int, dim, 1>;
     using PtType = Eigen::Matrix<float, dim, 1>;
+    // 这里为什么用了typename这个关键字
+    // 解释：当模板没有实例化时，使用::content，此时不明确content是静态变量还是类型，现在使用typename的话就是明确这是个类型
     using NodeType = typename IVoxNodeTypeTraits<node_type, PointType, dim>::NodeType;
     using PointVector = std::vector<PointType, Eigen::aligned_allocator<PointType>>;
     using DistPoint = typename NodeType::DistPoint;
@@ -254,18 +261,20 @@ bool IVox<dim, node_type, PointType>::GetClosestPoint(const PointVector& cloud, 
     return true;
 }
 
+// 往体素里放置点，同样当总体体素数量超量的时候抛出最老的体素（这里和fast_lio有区别）
 template <int dim, IVoxNodeType node_type, typename PointType>
 void IVox<dim, node_type, PointType>::AddPoints(const PointVector& points_to_add) {
     std::for_each(points_to_add.begin(), points_to_add.end(), [this](const auto& pt) {
         auto key = Pos2Grid(math::ToEigen<float, dim>(pt));
 
         auto iter = grids_map_.find(key);
+        // 如果第一添加该体素时，实际内存中存储点的是grids_cache, 储存索引的是grids_map 先以当前点作为质心
         if (iter == grids_map_.end()) {
             PointType center;
             center.getVector3fMap() = key.template cast<float>() * options_.resolution_;
 
             grids_cache_.push_front({key, NodeType(center, options_.resolution_)});
-            grids_map_.insert({key, grids_cache_.begin()});
+            grids_map_.insert({key, grids_cache_.begin()});  // 不要被begin给迷惑啦，实际就是真实内存位置
 
             grids_cache_.front().second.InsertPoint(pt);
 
