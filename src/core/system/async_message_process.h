@@ -69,7 +69,7 @@ class AsyncMessageProcess {
 
     /// 跳帧
     bool enable_skip_ = false;
-    int skip_num_ = 0;
+    int skip_num_ = 0;  // skip_num_: 1 是不跳帧， skip_num_: 2 是跳1帧
     int skip_cnt_ = 0;
 
     ProcFunc custom_func_;
@@ -98,6 +98,7 @@ template <typename T>
 void AsyncMessageProcess<T>::ProcLoop() {
     while (!exit_flag_) {
         UL lock(mutex_);
+        // 阻塞当前线程，知道条件变量被通知且谓词（函数）返回true。如果没有返回true则释放锁并进入状态，知道被唤醒
         cv_msg_.wait(lock, [this]() { return update_flag_; });
 
         // take the message and process it
@@ -106,7 +107,6 @@ void AsyncMessageProcess<T>::ProcLoop() {
         update_flag_ = false;
         lock.unlock();
 
-        // 处理之
         for (const auto& msg : buffer) {
             custom_func_(msg);
         }

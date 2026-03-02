@@ -34,9 +34,9 @@ void LoopClosing::Init(const std::string yaml_path) {
 
     info_motion_.setIdentity();
     info_motion_.block<3, 3>(0, 0) =
-        Mat3d::Identity() * 1.0 / (options_.motion_trans_noise_ * options_.motion_trans_noise_);
+        Mat3d::Identity() * 1.0 / (options_.motion_trans_noise_ * options_.motion_trans_noise_);  // 3维
     info_motion_.block<3, 3>(3, 3) =
-        Mat3d::Identity() * 1.0 / (options_.motion_rot_noise_ * options_.motion_rot_noise_);
+        Mat3d::Identity() * 1.0 / (options_.motion_rot_noise_ * options_.motion_rot_noise_);  // 3维
 
     info_loops_.setIdentity();
     info_loops_.block<3, 3>(0, 0) = Mat3d::Identity() * 1.0 / (options_.loop_trans_noise_ * options_.loop_trans_noise_);

@@ -165,8 +165,8 @@ class LaserMapping {
     pcl::VoxelGrid<PointType> voxel_scan_;            // voxel filter for current scan
 
     std::vector<float> residuals_;           // point-to-plane residuals
-    std::vector<bool> point_selected_surf_;  // selected points
-    std::vector<Vec4f> plane_coef_;          // plane coeffs 平面系数
+    std::vector<bool> point_selected_surf_;  // selected points 用于存放是否可以生成平面
+    std::vector<Vec4f> plane_coef_;          // plane coeffs 用于存放邻点生成平面的方程平面系数
 
     std::mutex mtx_buffer_;
     std::deque<double> time_buffer_;

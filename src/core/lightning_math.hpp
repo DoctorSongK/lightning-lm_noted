@@ -366,6 +366,7 @@ inline bool esti_plane(Eigen::Matrix<T, 4, 1>& pca_result, const PointVector& po
 
     Eigen::Matrix<T, 3, 1> normvec;
 
+    // step1 知Ax + By + Cz + D = 0（面方程），求对应[A,B,C,D].trans()
     if (point.size() == fasterlio::NUM_MATCH_POINTS) {
         Eigen::Matrix<T, fasterlio::NUM_MATCH_POINTS, 3> A;
         Eigen::Matrix<T, fasterlio::NUM_MATCH_POINTS, 1> b;
@@ -380,6 +381,14 @@ inline bool esti_plane(Eigen::Matrix<T, 4, 1>& pca_result, const PointVector& po
             A(j, 2) = point[j].z;
         }
 
+        // colPivHouseholderQr是Eigen线性代数库中一种QR分解器，核心作用：对矩阵做带列主元的Householder
+        // QR分解，用于鲁棒地求解线性方程组和最小二乘问题
+        /**
+         * 使用方式：
+         *       A.colPivHouseholderQr().solve(b);
+         *       用于求解线性方程组Ax = b 或 x = argmin|| Ax - b ||
+         */
+
         normvec = A.colPivHouseholderQr().solve(b);
     } else {
         Eigen::MatrixXd A(point.size(), 3);
@@ -387,6 +396,7 @@ inline bool esti_plane(Eigen::Matrix<T, 4, 1>& pca_result, const PointVector& po
 
         A.setZero();
         b.setOnes();
+        // QUES: 为什么这里乘了个-号，是不是在求观测矩阵时候就不用乘负号啦
         b *= -1.0f;
 
         for (int j = 0; j < point.size(); j++) {
@@ -407,6 +417,7 @@ inline bool esti_plane(Eigen::Matrix<T, 4, 1>& pca_result, const PointVector& po
     pca_result(2) = normvec(2) / n;
     pca_result(3) = 1.0 / n;
 
+    // step2 校验，计算每个点到平面的距离，距离超过指定阈值则认为拟合失败
     for (const auto& p : point) {
         Eigen::Matrix<T, 4, 1> temp = p.getVector4fMap();
         temp[3] = 1.0;

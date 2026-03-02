@@ -217,11 +217,12 @@ bool LaserMapping::Run() {
         return false;
     }
     scan_down_world_->resize(cur_pts);
+    // 重新设定激光点邻域点的接收容器
     nearest_points_.resize(cur_pts);
 
     Timer::Evaluate(
         [&, this]() {
-            // 成员变量预分配
+            // 在更新前做成员变量预分配
             residuals_.resize(cur_pts, 0);
             point_selected_surf_.resize(cur_pts, true);
             plane_coef_.resize(cur_pts, Vec4f::Zero());
@@ -262,7 +263,9 @@ bool LaserMapping::Run() {
         if ((last_pose.translation() - cur_pose.translation()).norm() > options_.kf_dis_th_ ||
             (last_pose.so3().inverse() * cur_pose.so3()).log().norm() > options_.kf_angle_th_) {
             MakeKF();
-        } else if (!options_.is_in_slam_mode_ && (state_point_.timestamp_ - last_kf_->GetState().timestamp_) > 2.0) {
+        }
+        // 如果不是建图模式的话，超过两s就创建关键帧
+        else if (!options_.is_in_slam_mode_ && (state_point_.timestamp_ - last_kf_->GetState().timestamp_) > 2.0) {
             MakeKF();
         }
     }
@@ -448,6 +451,15 @@ bool LaserMapping::SyncPackages() {
 }
 
 // 输入激光点云为scan_down_body_（下采样后的Lidar坐标系的点云）
+/**
+ * 这里和fast_lio的相同函数有点区别
+ * fast_lio的MapIncremental中有判断localmap是否移动的一部分
+ * step1 初始化时：基于初始位姿创建一个指定size的local_map大小
+ * step2 判断是否需要移动：判断机器人与local_map的边界是否过近
+ * step3 移动距离计算：若过近则将local_map按照过近的距离方向移动
+ * step4 删除不在localmap中的点，计算需要删除的小地图的min和max
+ * step5 最后方法kdtree中查找删除
+ */
 void LaserMapping::MapIncremental() {
     PointVector points_to_add;
     PointVector point_no_need_downsample;
@@ -467,14 +479,17 @@ void LaserMapping::MapIncremental() {
 
         /* decide if need add to map */
         PointType &point_world = scan_down_world_->points[i];
+        // 这里的nearest_points_是eskf做update时保存的东西
         if (!nearest_points_[i].empty() && flg_EKF_inited_) {
             const PointVector &points_near = nearest_points_[i];
 
+            // 计算体素单元中心点（经典操作，先尽可能找到左上角点，然后+0.5, 在转换为原坐标系就是中心点）
             Eigen::Vector3f center =
                 ((point_world.getVector3fMap() / filter_size_map_min_).array().floor() + 0.5) * filter_size_map_min_;
 
             Eigen::Vector3f dis_2_center = points_near[0].getVector3fMap() - center;
 
+            // 以center为球心，球径为0.5 * filter_size_map_min_，如果相邻点在球外的话，则不需要下采样
             if (fabs(dis_2_center.x()) > 0.5 * filter_size_map_min_ &&
                 fabs(dis_2_center.y()) > 0.5 * filter_size_map_min_ &&
                 fabs(dis_2_center.z()) > 0.5 * filter_size_map_min_) {
@@ -486,6 +501,7 @@ void LaserMapping::MapIncremental() {
             float dist = math::calc_dist(point_world.getVector3fMap(), center);
             if (points_near.size() >= fasterlio::NUM_MATCH_POINTS) {
                 for (int readd_i = 0; readd_i < fasterlio::NUM_MATCH_POINTS; readd_i++) {
+                    // 如果相邻点中已经有比当前点到中心点更小距离的点，就不需要添加啦
                     if (math::calc_dist(points_near[readd_i].getVector3fMap(), center) < dist + 1e-6) {
                         need_add = false;
                         break;
@@ -519,6 +535,7 @@ void LaserMapping::MapIncremental() {
 
 // 对于多重ESKF的观测量的话，可以采用那个数据来更谁的操作，比如GPS 1hz，Lidar
 // 15hz，当lidar来的时候处理一次雷达，然后继续做状态量更新，当GPS来的时候，再次更新
+// 在做更新时采用的是滤波后的激光点（去畸变后的雷达坐标系激光点）
 void LaserMapping::ObsModel(NavState &s, ESKF::CustomObservationModel &obs) {
     int cnt_pts = scan_down_body_->size();
 
@@ -530,9 +547,13 @@ void LaserMapping::ObsModel(NavState &s, ESKF::CustomObservationModel &obs) {
     Timer::Evaluate(
         [&, this]() {
             /**
-             * @brief
-             *
+             * 关于两个齐次坐标转换矩阵的计算
+             *  R_1  T_1     R_2  T_2     R_1 * R_2   R_1 * T_2 + T_1
+             * [        ] * [        ] = [                           ]
+             *  0      1     0      1     0                         1
              */
+
+            // step1 获取当前激光雷达在世界坐标系的位姿，清空
             auto R_wl = (s.rot_ * s.offset_R_lidar_).cast<float>();
             auto t_wl = (s.rot_ * s.offset_t_lidar_ + s.pos_).cast<float>();
 
@@ -541,7 +562,7 @@ void LaserMapping::ObsModel(NavState &s, ESKF::CustomObservationModel &obs) {
                 PointType &point_world = scan_down_world_->points[i];
 
                 /* transform to world frame */
-                Vec3f p_body = point_body.getVector3fMap();
+                Vec3f p_body = point_body.getVector3fMap();  // 返回向量
                 point_world.getVector3fMap() = R_wl * p_body + t_wl;
                 point_world.intensity = point_body.intensity;
 
@@ -560,8 +581,9 @@ void LaserMapping::ObsModel(NavState &s, ESKF::CustomObservationModel &obs) {
                 if (point_selected_surf_[i]) {
                     auto temp = point_world.getVector4fMap();
                     temp[3] = 1.0;
-                    float pd2 = plane_coef_[i].dot(temp);
+                    float pd2 = plane_coef_[i].dot(temp);  // 求取点到平面的距离
 
+                    // QUES: 这里的81是啥玩意，没搞明白 | 个人猜测是去掉低距离扫描和过大距离异常点
                     bool valid_corr = p_body.norm() > 81 * pd2 * pd2;
                     if (valid_corr) {
                         point_selected_surf_[i] = true;
@@ -609,7 +631,9 @@ void LaserMapping::ObsModel(NavState &s, ESKF::CustomObservationModel &obs) {
 
             std::for_each(std::execution::par_unseq, index.begin(), index.end(), [&](const size_t &i) {
                 Vec3f point_this_be = corr_pts_[i].head<3>();
+                // 生成反对称矩阵
                 Mat3f point_be_crossmat = math::SKEW_SYM_MATRIX(point_this_be);
+                // 转换到imu坐标系
                 Vec3f point_this = off_R * point_this_be + off_t;
                 // m
                 Mat3f point_crossmat = math::SKEW_SYM_MATRIX(point_this);
@@ -626,7 +650,7 @@ void LaserMapping::ObsModel(NavState &s, ESKF::CustomObservationModel &obs) {
                     obs.h_x_.block<1, 12>(i, 0) << norm_vec[0], norm_vec[1], norm_vec[2], A[0], A[1], A[2], B[0], B[1],
                         B[2], C[0], C[1], C[2];
                 } else {
-                    // 这里对应fast_lio课件中观测方程雅克比推导内容中的公式13
+                    // 这里对应fast_lio课件中观测方程雅克比推导内容中的公式13（略有区别）
                     obs.h_x_.block<1, 12>(i, 0) << norm_vec[0], norm_vec[1], norm_vec[2], A[0], A[1], A[2], 0.0, 0.0,
                         0.0, 0.0, 0.0, 0.0;
                 }
@@ -674,15 +698,18 @@ CloudPtr LaserMapping::GetGlobalMap(bool use_lio_pose, bool use_voxel, float res
 
         CloudPtr cloud_trans(new PointCloudType);
 
+        // 单纯lio建图
         if (use_lio_pose) {
             pcl::transformPointCloud(*cloud_filter, *cloud_trans, kf->GetLIOPose().matrix());
         } else {
+            // 经图优化后的地图
             pcl::transformPointCloud(*cloud_filter, *cloud_trans, kf->GetOptPose().matrix());
         }
 
         *global_map += *cloud_trans;
     }
 
+    // 最后对整个地图再做一次体素滤波
     CloudPtr global_map_filtered(new PointCloudType);
     if (use_voxel) {
         voxel.setInputCloud(global_map);

@@ -32,6 +32,7 @@ class LoopClosing {
         double ndt_score_th_ = 1.0;  // ndt位姿分值
 
         /// 图优化权重
+        // QUES: 难道噪声越小，权重越大吗？？？
         double motion_trans_noise_ = 0.1;               // 位移权重
         double motion_rot_noise_ = 3.0 * M_PI / 180.0;  // 旋转权重
 
@@ -85,7 +86,7 @@ class LoopClosing {
     Mat6d info_motion_ = Mat6d::Identity();  // 关键帧间的运动信息阵
     Mat6d info_loops_ = Mat6d::Identity();   // 回环帧的信息矩阵
 
-    std::vector<std::shared_ptr<miao::VertexSE3>> kf_vert_;
+    std::vector<std::shared_ptr<miao::VertexSE3>> kf_vert_;  // 关键帧顶点
     std::vector<std::shared_ptr<miao::EdgeSE3>> edge_loops_;
 
     LoopClosedCallback loop_cb_;

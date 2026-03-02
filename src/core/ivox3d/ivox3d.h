@@ -140,6 +140,8 @@ template <int dim, IVoxNodeType node_type, typename PointType>
 bool IVox<dim, node_type, PointType>::GetClosestPoint(const PointType& pt, PointVector& closest_pt, int max_num,
                                                       double max_range) {
     std::vector<DistPoint> candidates;
+    // 这里的max_num指的是一个体素里的最大邻域数量，而在搜索最近点时，会查找9、18等不同方向的邻域体素内容
+    // 更重要的是，这里的max_num也是最终输出的点云个数，也就是接收的时候很多最后再排序滤波拿到最终的点
     candidates.reserve(max_num * nearby_grids_.size());
 
     auto key = Pos2Grid(math::ToEigen<float, dim>(pt));
