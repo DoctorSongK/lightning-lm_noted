@@ -50,10 +50,10 @@ class G2P5 {
 
         double lidar_height_ = 0.0;  // 雷达的安装高度
 
-        double default_floor_height_ = -1.0;  // 默认的地面高度(通常在雷达下方)
+        double default_floor_height_ = -1.0;  // 默认的地面高度(通常在雷达下方)，相对于雷达水平面的值
         double min_th_floor_ = 0.5;           /// 距离地面这个高的障碍物讲被扫入栅格地图中
         double max_th_floor_ = 1.2;           /// 距离地面这个高的障碍物讲被扫入栅格地图中
-        float usable_scan_range_ = 50.0;      // 用于计算栅格地图的最远障碍物距离
+        float usable_scan_range_ = 50.0;  // 用于计算栅格地图的最远障碍物距离
 
         double grid_map_resolution_ = 0.1;  // 栅格地图的分辨率，室外建议为0.1，室内可以用0.05
 

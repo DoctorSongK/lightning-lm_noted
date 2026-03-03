@@ -208,6 +208,7 @@ bool G2P5::ResizeMap(const std::vector<Keyframe::Ptr> &kfs, G2P5MapPtr &map) {
                 continue;
             }
 
+            // QUES: 这里也是没考虑IMU_2_Lidar
             Vec3d point = pose * cloud->points[i].getVector3fMap().cast<double>();
 
             if ((point.x() - 1) < min_x) {
@@ -249,6 +250,7 @@ bool G2P5::ResizeMap(const std::vector<Keyframe::Ptr> &kfs, G2P5MapPtr &map) {
     return true;
 }
 
+// 如果是在线的话，就1个点云
 bool G2P5::AddKfToMap(const std::vector<Keyframe::Ptr> &kfs, G2P5MapPtr &map) {
     /// 如果需要，更新地图大小
     ResizeMap(kfs, map);
@@ -286,9 +288,9 @@ void G2P5::Convert3DTo2DScan(Keyframe::Ptr kf, G2P5MapPtr &map) {
     }
 
     // step 1. 计算每个方向上发出射线上的高度分布, // NOTE 转成整形的360度是有精度损失的
-    std::vector<std::map<double, double>> rays(360);               // map键值：距离-相对高度（以距离排序）
+    std::vector<std::map<double, double>> rays(360);  // map键值：距离-相对高度（以距离排序）
     std::vector<Vec2d> angle_distance_height(360, Vec2d::Zero());  // 每个角度上的距离-高度值
-    std::vector<Vec3d> pts_3d;                                     /// 距离地面0.3 ～ 1.2米之间的点云，激光坐标系下
+    std::vector<Vec3d> pts_3d;  /// 距离地面0.3 ～ 1.2米之间的点云，激光坐标系下
 
     SE3 Twb = kf->GetOptPose();
 
@@ -315,6 +317,7 @@ void G2P5::Convert3DTo2DScan(Keyframe::Ptr kf, G2P5MapPtr &map) {
         Vec2d p = pc.head<2>();
         double dis = p.norm();
 
+        // QUES:如果超距离则直接返回，是不是应该整成白的？？？
         if (dis > options_.usable_scan_range_) {
             continue;
         }

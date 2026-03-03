@@ -12,7 +12,7 @@ namespace lightning {
 /**
  * 回环检测候选帧
  * @brief idx1 节点1
- * @brief idx2 节点2
+ * @brief idx2 节点2 当前帧
  * @brief Tij  节点2相对于节点1的位姿
  */
 struct LoopCandidate {

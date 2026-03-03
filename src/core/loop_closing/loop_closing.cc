@@ -97,21 +97,24 @@ void LoopClosing::DetectLoopCandidates() {
     candidates_.clear();
 
     auto& kfs_mapping = all_keyframes_;
-    Keyframe::Ptr check_first = nullptr;
+    Keyframe::Ptr check_first = nullptr;  // 这个是干啥的？？？
 
     if (last_loop_kf_ == nullptr) {
         last_loop_kf_ = cur_kf_;
         return;
     }
 
+    // 要求多少帧才进行回环检测，用于控制频率
+    // 这个控制的是当前关键帧和上一次回环帧的距离
     if (last_loop_kf_ && (cur_kf_->GetID() - last_loop_kf_->GetID()) <= options_.loop_kf_gap_) {
         LOG(INFO) << "skip because last loop kf: " << last_loop_kf_->GetID();
         return;
     }
 
     for (auto kf : kfs_mapping) {
+        // 这里控制的是历史关键帧形成回环后，其周围关键帧不参与与当前关键帧的计算
         if (check_first != nullptr && abs(int(kf->GetID() - check_first->GetID())) <= options_.min_id_interval_) {
-            // 同条轨迹内，跳过一定的ID区间
+            // 要距上一次回环有一定帧间隔
             continue;
         }
 
@@ -165,6 +168,7 @@ void LoopClosing::ComputeLoopCandidates() {
     candidates_.swap(succ_candidates);
 }
 
+// 需要明确的是，这回环过程中省略了imu_2_lidar的坐标转换，全程直接使用map_2_lidar，但结果不应该，个人猜测是防止在线优化imu_2_lidar的变换影响了后端
 void LoopClosing::ComputeForCandidate(lightning::LoopCandidate& c) {
     LOG(INFO) << "aligning " << c.idx1_ << " with " << c.idx2_;
     const int submap_idx_range = 40;
@@ -259,8 +263,9 @@ void LoopClosing::PoseOptimization() {
     kf_vert_.emplace_back(v);
 
     /// 上一个关键帧的运动约束
-    /// TODO 3D激光最好是跟前面多个帧都有关联
+    /// TODO 3D激光最好是跟前面多个帧都有关联  为什么要与多个帧有关联呢？？？？？
 
+    // 增加俩帧运动约束
     for (int i = 1; i < 3; i++) {
         int id = cur_kf_->GetID() - i;
         if (id >= 0) {
@@ -277,7 +282,7 @@ void LoopClosing::PoseOptimization() {
     }
 
     if (options_.with_height_) {
-        /// 高度约束
+        /// 高度约束，开启后整个地图的z值将都限制在0处
         auto e = std::make_shared<miao::EdgeHeightPrior>();
         e->SetVertex(0, v);
         e->SetMeasurement(0);
@@ -315,12 +320,15 @@ void LoopClosing::PoseOptimization() {
     optimizer_->Optimize(20);
 
     /// remove outliers
+    /// 去除异常值
     int cnt_outliers = 0;
     for (auto& e : edge_loops_) {
         if (e->GetRobustKernel() == nullptr) {
             continue;
         }
 
+        // 卡方分布的基本意义是在于衡量数据与预期模型之间的差异程度，它是偏差或误差的度量工具
+        // 卡方分布就是加上该边后，整个优化过程的残差变大，进而卡方变大，从而降低该边权重；对于残差和小，卡方小的边则取消鲁棒核函数
         if (e->Chi2() > e->GetRobustKernel()->Delta()) {
             e->SetLevel(1);
             cnt_outliers++;
@@ -334,12 +342,14 @@ void LoopClosing::PoseOptimization() {
     }
 
     /// get results
+    // 这里的kf_vert是指针所以可以直接操作
     for (auto& vert : kf_vert_) {
         SE3 pose = vert->Estimate();
         all_keyframes_[vert->GetId()]->SetOptPose(pose);
     }
 
     if (loop_cb_) {
+        // 该函数用于3维转2维功能处，当回环计算完成后，直接将优化结果反馈给该功能
         loop_cb_();
     }
 

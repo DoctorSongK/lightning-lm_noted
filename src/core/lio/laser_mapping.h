@@ -156,7 +156,7 @@ class LaserMapping {
     int kf_id_ = 0;
 
     /// point clouds data
-    CloudPtr scan_undistort_{new PointCloudType()};   // scan after undistortion 去畸变后的点云
+    CloudPtr scan_undistort_{new PointCloudType()};   // scan after undistortion 去畸变后的点云 Lidar坐标下
     CloudPtr scan_down_body_{new PointCloudType()};   // downsampled scan in body  激光坐标系下的点云
     CloudPtr scan_down_world_{new PointCloudType()};  // downsampled scan in world  世界坐标系下的点云
     std::vector<PointVector> nearest_points_;         // nearest points of current scan

@@ -39,7 +39,7 @@ class LoopClosing {
         double loop_trans_noise_ = 0.2;               // 位移权重
         double loop_rot_noise_ = 3.0 * M_PI / 180.0;  // 旋转权重
 
-        double rk_loop_th_ = 5.2 / 5;  // 回环的RK阈值
+        double rk_loop_th_ = 5.2 / 5;  // 回环的RK阈值 用于回环的假阳性导致拉歪
 
         bool with_height_ = true;
         double height_noise_ = 0.1;
