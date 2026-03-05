@@ -25,6 +25,7 @@ bool Localization::Init(const std::string& yaml_path, const std::string& global_
 
     /// lidar odom前端
     LaserMapping::Options opt_lio;
+    // 非slam模式，只维持最近两帧，不会记录所有关键帧
     opt_lio.is_in_slam_mode_ = false;
 
     lio_ = std::make_shared<LaserMapping>(opt_lio);
@@ -61,6 +62,7 @@ bool Localization::Init(const std::string& yaml_path, const std::string& global_
     options_.enable_lidar_odom_skip_ = yaml.GetValue<bool>("system", "enable_lidar_odom_skip");
     options_.lidar_odom_skip_num_ = yaml.GetValue<int>("system", "lidar_odom_skip_num");
 
+    // NOTE: 这里仅保留一帧数据，以保证实时性，但是建图的时候不是
     lidar_odom_proc_cloud_.SetMaxSize(1);
     lidar_loc_proc_cloud_.SetMaxSize(1);
 

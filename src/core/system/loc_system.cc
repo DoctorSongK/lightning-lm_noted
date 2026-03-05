@@ -33,6 +33,7 @@ bool LocSystem::Init(const std::string &yaml_path) {
     imu_topic_ = yaml.GetValue<std::string>("common", "imu_topic");
     cloud_topic_ = yaml.GetValue<std::string>("common", "lidar_topic");
     livox_topic_ = yaml.GetValue<std::string>("common", "livox_lidar_topic");
+    // TODO: 未找到RTK的输入
 
     rclcpp::QoS qos(10);
 
@@ -71,6 +72,7 @@ bool LocSystem::Init(const std::string &yaml_path) {
     return ret;
 }
 
+// 必须设定初始位姿后，方可进行定位操作
 void LocSystem::SetInitPose(const SE3 &pose) {
     LOG(INFO) << "set init pose: " << pose.translation().transpose() << ", "
               << pose.unit_quaternion().coeffs().transpose();
