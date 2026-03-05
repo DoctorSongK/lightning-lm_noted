@@ -53,19 +53,37 @@ std::shared_ptr<G2P5Map> G2P5Map::MakeDeepCopy() {
 
 bool G2P5Map::Resize(const float &temp_min_x, const float &temp_min_y, const float &temp_max_x,
                      const float &temp_max_y) {
+    // SUB_GRID子地图数量
     int temp_grid_size_x = ceil((temp_max_x - temp_min_x) / grid_reso_) + 1;
     int temp_grid_size_y = ceil((temp_max_y - temp_min_y) / grid_reso_) + 1;
 
+    // 子地图初始化
     auto **new_grids = new SubGrid *[temp_grid_size_x];
     for (int xi = 0; xi < temp_grid_size_x; ++xi) {
         new_grids[xi] = new SubGrid[temp_grid_size_y];
     }
 
+    // 都是基于min_x min_y做对应调整
+    /**
+     *        _______________________________________   (temp_max_x, temp_max_y)
+     *       |                                       |
+     *       |                                       |
+     *       |       ____________ (max_x, max_y)     |
+     *       |      |            |                   |
+     *       |      |            |                   |
+     *       |      |            |                   |
+     *       |      |____________|                   |
+     *       |    （min_x, min_y)                    |
+     *       |                                       |
+     *       |_______________________________________|
+     *  (temp_min_x, temp_min_y)
+     */
     int min_grid_x = (int)round((temp_min_x - min_x_) / grid_reso_);
     int min_grid_y = (int)round((temp_min_y - min_y_) / grid_reso_);
     int max_grid_x = (int)ceil((temp_max_x - min_x_) / grid_reso_);
     int max_grid_y = (int)ceil((temp_max_y - min_y_) / grid_reso_);
 
+    // 找到更新的范围，如果发现范围在原地图以内的话，就用现在更小的值，如果发现在原地图以外，保持原地图的宽和高
     int dx = min_grid_x < 0 ? 0 : min_grid_x;
     int dy = min_grid_y < 0 ? 0 : min_grid_y;
     int Dx = max_grid_x < this->grid_size_x_ ? max_grid_x : this->grid_size_x_;
@@ -79,6 +97,7 @@ bool G2P5Map::Resize(const float &temp_min_x, const float &temp_min_y, const flo
             assert((x) >= 0 && (x) < temp_grid_size_x);
             assert((y) >= 0 && (y) < temp_grid_size_y);
 
+            // 完成坐标转换，移动拼图
             new_grids[x - min_grid_x][y - min_grid_y] = this->grids_[x][y];
         }
         delete[] this->grids_[x];
@@ -125,9 +144,26 @@ void G2P5Map::UpdateCell(const Vec2i &point_index, const bool &if_hit, float hei
     if (grids_ == nullptr) {
         return;
     }
-
+    // x_index y_index是整个地图下的索引
     int x_index = point_index.x();
     int y_index = point_index.y();
+    // QUES: 这里的右移是干啥用的 相当于原值除了个16
+    /**
+     *      _________________________________
+     *     |           |                     |
+     *     |     A     |                     |
+     *     |           | 16                  |
+     *     |___________|                     |
+     *     |    16                           |
+     *     |                                 |
+     *     |                                 |
+     *     |                                 |
+     *     |_________________________________|
+     *
+     * 上图中A就是一个SUB_GRID，其size为16 x 16
+     */
+
+    // xi yi是SUB_GRID的在整个地图下的索引
     int xi = (x_index >> SUB_GRID_SIZE);
     int yi = (y_index >> SUB_GRID_SIZE);
 
@@ -135,6 +171,7 @@ void G2P5Map::UpdateCell(const Vec2i &point_index, const bool &if_hit, float hei
         return;
     }
 
+    // sub_index_i sub_index_j 是点在SUB_GRID中的索引
     int sub_index_i = x_index - (xi << SUB_GRID_SIZE);
     int sub_index_j = y_index - (yi << SUB_GRID_SIZE);
 
@@ -146,6 +183,7 @@ void G2P5Map::UpdateCell(const Vec2i &point_index, const bool &if_hit, float hei
     grids_[xi][yi].SetGridHitPoint(if_hit, sub_index_i, sub_index_j, height);
 }
 
+// 执行bresenham算法
 void G2P5Map::SetMissPoint(const float &point_x, const float &point_y, const float &laser_origin_x,
                            const float &laser_origin_y, float height, float lidar_height) {
     if (grids_ == nullptr) {
@@ -288,6 +326,7 @@ nav_msgs::msg::OccupancyGrid G2P5Map::ToROS() {
                             index_min = std::max(0, index - 1);
                             index_max = std::min(grid_map_size_1, index + 1);
 
+                            // 为什么要取三个，而不是一个呢？？？
                             for (auto extend = index_min; extend <= index_max; extend++) {
                                 if (occu_map.data[extend] < 0) {  //-1
                                     tmp_area++;

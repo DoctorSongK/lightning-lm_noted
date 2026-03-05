@@ -54,6 +54,7 @@ class G2P5Map {
 
     bool Init(const float &temp_min_x, const float &temp_min_y, const float &temp_max_x, const float &temp_max_y);
 
+    // NOTE: 该函数完成地图平移和转换
     bool Resize(const float &temp_min_x, const float &temp_min_y, const float &temp_max_x, const float &temp_max_y);
 
     void SetHitPoint(const float &px, const float &py, const bool &if_hit, float height);
@@ -104,7 +105,7 @@ class G2P5Map {
     float min_x_ = 0, min_y_ = 0, max_x_ = 0, max_y_ = 0;
     int grid_size_x_ = 0, grid_size_y_ = 0;
 
-    inline static const int sub_grid_width_ = (1 << SUB_GRID_SIZE);
+    inline static const int sub_grid_width_ = (1 << SUB_GRID_SIZE);  // 子图栅格宽度为16
 
     Options options_;
 

@@ -135,7 +135,7 @@ class G2P5 {
     /// 后端相关
     std::thread draw_backend_map_thread_;           // 后端重绘的线程
     std::atomic_bool backend_redraw_flag_ = false;  // 后端重绘的flag
-    G2P5MapPtr backend_map_ = nullptr;              // 正在绘制的地图
+    G2P5MapPtr backend_map_ = nullptr;              // 正在绘制的地图，触发回环后的地图
 
     Vec4d floor_coeffs_ = Vec4d(0, 0, 1.0, 1.0);  // 地面方程参数
 };

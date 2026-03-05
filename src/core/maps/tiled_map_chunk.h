@@ -11,7 +11,7 @@
 namespace lightning {
 
 /**
- * @brief 一个地图区块
+ * @brief 一个地图区块 默认是100m * 100m
  *
  * TODO thread-safe
  */

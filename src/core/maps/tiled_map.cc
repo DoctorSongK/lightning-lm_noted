@@ -19,6 +19,7 @@ bool TiledMap::ConvertFromFullPCD(CloudPtr map, const SE3& start_pose, const std
 
     chunk_id_ = 0;
 
+    // 分割全地图，一个地图的尺寸100m * 100m
     for (const auto& pt : map->points) {
         Vec2i grid = Pos2Grid(math::ToEigen<float, 2, PointType>(pt));
         auto iter = static_chunks_.find(grid);

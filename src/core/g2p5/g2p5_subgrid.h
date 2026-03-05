@@ -34,6 +34,8 @@ class SubGrid {
 
         if (hit) {
             // 占据，黑色
+            // 记录最小高度
+            // QUES: 如果高度并没有发生改变，这个栅格就不做处理了吗，就是访问数量和hit数量均不做变化（等于不变？？？）
             if (height < cell.height_) {
                 cell.height_ = height;
                 cell.hit_cnt_ += 1;
@@ -42,7 +44,7 @@ class SubGrid {
         } else {
             // 非占据，白色
             if (cell.hit_cnt_ > 3) {
-                // 本身为黑色，黑色刷白有高度要求
+                // 本身为黑色，黑色刷白有高度要求，理论上来讲高度肯定会比占用的时候低才对
                 if (height < cell.height_) {
                     cell.visit_cnt_ += 1;
                 }

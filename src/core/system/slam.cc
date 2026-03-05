@@ -167,6 +167,7 @@ void SlamSystem::SaveMap(const std::string& path) {
     tm_options.map_path_ = save_path;
 
     TiledMap tm(tm_options);
+    // 记录第一个关键帧的位姿，并将其作为开始
     SE3 start_pose = lio_->GetAllKeyframes().front()->GetOptPose();
     tm.ConvertFromFullPCD(global_map, start_pose, save_path);
 

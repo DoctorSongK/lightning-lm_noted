@@ -30,6 +30,7 @@ int main(int argc, char** argv) {
     }
 
     /// 默认起点开始定位
+    /// TODO: 设定初始位姿
     loc.SetInitPose(SE3());
     loc.Spin();
 

@@ -122,7 +122,7 @@ void G2P5::RenderBack() {
             Keyframe::Ptr frontend_kf = nullptr;
             {
                 UL lock(frontend_mutex_);
-                frontend_kf = frontend_current_;
+                frontend_kf = frontend_current_;  // frontend_current_ 是最新推进来的kf
             }
 
             if (cur_idx == frontend_kf->GetID()) {
@@ -146,6 +146,7 @@ void G2P5::RenderBack() {
         {
             /// 同步前后端地图，替换newest map
             UL lock{newest_map_mutex_};
+            // NOTE: 在触发回环后，把刚处理的后端地图同步给frontend_map
             frontend_map_ = backend_map_;
             newest_map_ = frontend_map_;
         }
@@ -242,6 +243,7 @@ bool G2P5::ResizeMap(const std::vector<Keyframe::Ptr> &kfs, G2P5MapPtr &map) {
         min_y = static_cast<int>((floor)(min_y / r)) * r;
         max_x = static_cast<int>((ceil)(max_x / r)) * r;
         max_y = static_cast<int>((ceil)(max_y / r)) * r;
+        // NOTE: g2p5_map中的map初始化过程
         map->Resize(min_x, min_y, max_x, max_y);
 
         LOG(INFO) << "map resized to " << min_x << ", " << min_y << ", " << max_x << ", " << max_y;
@@ -288,7 +290,7 @@ void G2P5::Convert3DTo2DScan(Keyframe::Ptr kf, G2P5MapPtr &map) {
     }
 
     // step 1. 计算每个方向上发出射线上的高度分布, // NOTE 转成整形的360度是有精度损失的
-    std::vector<std::map<double, double>> rays(360);  // map键值：距离-相对高度（以距离排序）
+    std::vector<std::map<double, double>> rays(360);  // map键值：距离-相对高度（以距离排序，从小到大）
     std::vector<Vec2d> angle_distance_height(360, Vec2d::Zero());  // 每个角度上的距离-高度值
     std::vector<Vec3d> pts_3d;  /// 距离地面0.3 ～ 1.2米之间的点云，激光坐标系下
 
@@ -324,6 +326,7 @@ void G2P5::Convert3DTo2DScan(Keyframe::Ptr kf, G2P5MapPtr &map) {
 
         double dis_floor = pn.dot(floor_coeffs_);  /// 该点到地面的距离
         double dangle = atan2(p[1], p[0]) * constant::kRAD2DEG;
+        // QUES: 这里导致最多就只有360跟ray线，不合理
         int angle = int(round(dangle) + 360) % 360;
 
         if (dis_floor > min_th) {
@@ -334,6 +337,7 @@ void G2P5::Convert3DTo2DScan(Keyframe::Ptr kf, G2P5MapPtr &map) {
                 rays[angle].insert({dis, dis_floor});
 
                 /// 设置黑点
+                /// QUES: 这里的pc应该也是Lidar坐标系下的点，现在又是将offset给省略啦
                 Vec3d p_world = Twb * pc;
                 map->SetHitPoint(p_world[0], p_world[1], true, dis_floor);
 
@@ -343,6 +347,7 @@ void G2P5::Convert3DTo2DScan(Keyframe::Ptr kf, G2P5MapPtr &map) {
             }
         } else if (dis_floor > -min_th) {
             // 地面附近或者地面以下
+            // 把地面附近的点也存进了rays这个容器中，但是没做操作
             rays[angle].insert({dis, dis_floor});
             cnt_valid++;
         }
@@ -366,6 +371,7 @@ void G2P5::Convert3DTo2DScan(Keyframe::Ptr kf, G2P5MapPtr &map) {
     constexpr double default_ray_distance = -1;
     const double floor_rh = floor_coeffs_[3];
 
+    // TODO: 这里的数也是写死的，是360，后面要是改的话都得统一改了
     for (int i = 0; i < 360; ++i) {
         if (quit_flag_) {
             return;
@@ -387,6 +393,7 @@ void G2P5::Convert3DTo2DScan(Keyframe::Ptr kf, G2P5MapPtr &map) {
             auto next_iter = iter;
             next_iter++;
 
+            // 对于一个障碍物来讲，按距离顺序排列时，确实会存在高度差的变化；如果没找到这个值的话就用最近的
             if (next_iter != rays[i].rend()) {
                 if (iter->second > options_.min_th_floor_ && next_iter->second < options_.min_th_floor_) {
                     // 当前点是障碍但下一个点不是
@@ -404,6 +411,7 @@ void G2P5::Convert3DTo2DScan(Keyframe::Ptr kf, G2P5MapPtr &map) {
 }
 
 void G2P5::SetWhitePoints(const std::vector<Vec2d> &pt2d, Keyframe::Ptr kf, G2P5MapPtr &map) {
+    // TODO: 这里也是写死的360
     assert(pt2d.size() == 360);
 
     SE3 pose = kf->GetOptPose();
