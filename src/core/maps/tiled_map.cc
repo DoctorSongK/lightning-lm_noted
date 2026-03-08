@@ -274,6 +274,7 @@ void TiledMap::AddDynamicCloud(CloudPtr cloud) {
     flag_first_dynamic_scan_ = false;
 }
 
+// 基于当前位置pose完成地图的加载和卸载
 void TiledMap::LoadOnPose(const SE3& pose) {
     Vec2d p = pose.translation().head<2>();
     auto this_grid = Pos2Grid(p);
@@ -299,10 +300,12 @@ void TiledMap::LoadOnPose(const SE3& pose) {
 
                 loaded_chunks_.emplace(cp.first);
             }
-
+            
+            // 动态地图里没有的话新创建一个，如果在的话就判断是否被卸载，如果被卸载的话重新被加载。其他情况不做处理
             auto dyn_iter = dynamic_chunks_.find(cp.first);
             if (dyn_iter == dynamic_chunks_.end()) {
                 // 创建这个动态区块
+                // id_ -> chunk_id_， cp.first -> grid(索引)
                 auto new_chunk = std::make_shared<MapChunk>(
                     cp.second->id_, cp.first, options_.map_path_ + "/" + std::to_string(cp.second->id_) + "_dyn.pcd");
                 dynamic_chunks_.emplace(cp.first, new_chunk);
@@ -342,7 +345,7 @@ void TiledMap::LoadOnPose(const SE3& pose) {
                     continue;
                 }
 
-                // 将本区块存盘并卸载点云
+                // 将本区块存盘并卸载点云，并记录在本地，前提是初始化了该参数
                 if (options_.save_dyn_when_unload_) {
                     std::string filename = options_.map_path_ + "/" + std::to_string(d->second->id_) + "_dyn.pcd";
                     d->second->cloud_->width = d->second->cloud_->size();

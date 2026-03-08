@@ -87,6 +87,7 @@ class VoxelGridCovariance : public pcl::VoxelGrid<PointT> {
 
     /** \brief Simple structure to hold a centroid, covarince and the number of points in a leaf.
      * Inverse covariance, eigen vectors and engen values are precomputed. */
+    // 用于存储质心、协方差以及叶子结点中点数的简单结构，已预先计算逆协方差、特征向量和特征值
     struct Leaf {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 

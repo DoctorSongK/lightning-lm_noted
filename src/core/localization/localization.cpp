@@ -52,6 +52,7 @@ bool Localization::Init(const std::string& yaml_path, const std::string& global_
     lidar_loc_->Init(yaml_path);
 
     /// pose graph
+    //QUES: 这里的PGO和建图是miao为啥不一样呢，难道这个不是以边和节点的形式？？类似与ceres的那种？
     pgo_ = std::make_shared<PGO>();
     pgo_->SetDebug(false);
 
@@ -82,6 +83,7 @@ bool Localization::Init(const std::string& yaml_path, const std::string& global_
     }
 
     /// TODO: 发布
+    /// QUES: 这里使用的后端优化和建图时的有什么区别吗？miao是添加节点和边，这边难道是ceres自己添加优化项的
     pgo_->SetHighFrequencyGlobalOutputHandleFunction([this](const LocalizationResult& res) {
         if (loc_result_.timestamp_ > 0) {
             double loc_fps = 1.0 / (res.timestamp_ - loc_result_.timestamp_);
@@ -125,6 +127,7 @@ bool Localization::Init(const std::string& yaml_path, const std::string& global_
     return true;
 }
 
+// 定位主流程 -- Lidar处理过程
 void Localization::ProcessLidarMsg(const sensor_msgs::msg::PointCloud2::SharedPtr cloud) {
     UL lock(global_mutex_);
     if (lidar_loc_ == nullptr || lio_ == nullptr || pgo_ == nullptr) {
@@ -132,10 +135,13 @@ void Localization::ProcessLidarMsg(const sensor_msgs::msg::PointCloud2::SharedPt
     }
 
     // 串行模式
+    // step1: 定位点云处理流程 -- 点云滤波和去除盲点
     CloudPtr laser_cloud(new PointCloudType);
     preprocess_->Process(cloud, laser_cloud);
+    // QUES: 这边时间戳单位为ns，建图时我记得是ns
     laser_cloud->header.stamp = cloud->header.stamp.sec * 1e9 + cloud->header.stamp.nanosec;
-
+    
+    // step2: 定位点云处理流程 -- 异步处理线程添加数据（lio 和 lidar_loc_）
     if (options_.online_mode_) {
         lidar_odom_proc_cloud_.AddMessage(laser_cloud);
     } else {
@@ -167,6 +173,7 @@ void Localization::LidarOdomProcCloud(CloudPtr cloud) {
     }
 
     /// NOTE: 在NCLT这种数据集中，lio内部是有缓存的，它拿到的点云不一定是最新时刻的点云
+    // QUES: 有个疑问，为什么做了两边雷达预处理过程？？？
     lio_->ProcessPointCloud2(cloud);
     if (!lio_->Run()) {
         return;
@@ -174,6 +181,9 @@ void Localization::LidarOdomProcCloud(CloudPtr cloud) {
 
     auto lo_state = lio_->GetState();
 
+    /////////////////////////////////////////////////////////////////
+    ////////////////////进入lidar_loc处理流程//////////////////////
+    // note: 激光里程计输入
     lidar_loc_->ProcessLO(lo_state);
     pgo_->ProcessLidarOdom(lo_state);
 
@@ -193,17 +203,19 @@ void Localization::LidarOdomProcCloud(CloudPtr cloud) {
     }
 
     lio_kf_ = kf;
-
+    
+    // scan是去畸变后的点云
     auto scan = lio_->GetScanUndist();
 
     if (options_.online_mode_) {
-        lidar_loc_proc_cloud_.AddMessage(scan);
+        lidar_loc_proc_cloud_.AddMessage(scan);  // NOTE: 这里是将去畸变后的点云添加到异步处理线程中，进行后续的定位处理
     } else {
         LidarLocProcCloud(scan);
     }
 }
 
 void Localization::LidarLocProcCloud(CloudPtr scan_undist) {
+    // 展开lidar_loc的处理流程
     lidar_loc_->ProcessCloud(scan_undist);
 
     auto res = lidar_loc_->GetLocalizationResult();
@@ -222,7 +234,9 @@ void Localization::LidarLocProcCloud(CloudPtr scan_undist) {
     }
 }
 
+/// IMU处理流程
 void Localization::ProcessIMUMsg(IMUPtr imu) {
+    
     UL lock(global_mutex_);
 
     if (lidar_loc_ == nullptr || lio_ == nullptr || pgo_ == nullptr) {
@@ -234,13 +248,14 @@ void Localization::ProcessIMUMsg(IMUPtr imu) {
         LOG(WARNING) << "IMU 时间异常：" << this_imu_time << ", last: " << last_imu_time_;
     }
     last_imu_time_ = this_imu_time;
-
+    // step1: IMU处理流程--建图lio部分输入（传感器同步，其中一个eskf专项前端计算）
     /// 里程计处理IMU
     lio_->ProcessIMU(imu);
 
     /// 这里需要 IMU predict，否则没法process DR了
     auto dr_state = lio_->GetIMUState();
 
+    // pose_is_ok_是指IMU状态是否已经初始化好了，如果没有初始化好，那么就不处理DR了
     if (!dr_state.pose_is_ok_) {
         return;
     }
@@ -260,6 +275,8 @@ void Localization::ProcessIMUMsg(IMUPtr imu) {
     //           << dr_state.GetPose().translation().transpose()
     //           << ", q=" << dr_state.GetPose().unit_quaternion().coeffs().transpose();
 
+    // step2: IMU处理流程--雷达定位dr数据输入和pose graph优化输入
+    // imu DR航迹推算输入
     lidar_loc_->ProcessDR(dr_state);
     pgo_->ProcessDR(dr_state);
 }

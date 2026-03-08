@@ -110,6 +110,9 @@ int pclomp::VoxelGridCovariance<PointT>::getNeighborhoodAtPoint1(const PointT& r
     return getNeighborhoodAtPoint(Eigen::MatrixXi::Zero(3, 1), reference_point, neighbors);
 }
 
+/// @brief 有点像增量式NDT的思想，先将点云加入到栅格中，然后计算每个栅格的协方差矩阵和中心点，避免全部卸载再加载
+/// @tparam PointT 
+/// @param target 
 template <typename PointT>
 void pclomp::VoxelGridCovariance<PointT>::AddTarget(pclomp::VoxelGridCovariance<PointT>::PointCloudPtr target) {
     for (size_t cp = 0; cp < target->points.size(); ++cp) {

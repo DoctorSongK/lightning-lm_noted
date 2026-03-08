@@ -216,6 +216,7 @@ class TiledMap {
                 if (!static_chunks_[idx]->cloud_->empty()) {
                     has_cloud = true;
                 }
+                // NDT可以循环加入点云
                 ndt->AddTarget(static_chunks_[idx]->cloud_);
             }
         }
@@ -268,7 +269,7 @@ class TiledMap {
     std::mutex dynamic_data_mutex_;  // 动态数据锁
 
     Vec3d origin_ = Vec3d::Zero();
-    ChunkHashMap static_chunks_;       // 静态地图
+    ChunkHashMap static_chunks_;       // 静态地图(建图构建的点云地图)
     ChunkHashMap dynamic_chunks_;      // 动态地图
     std::map<int, Vec2i> id_to_grid_;  // 从ID找grid
     int chunk_id_ = 0;                 // chunk生成时的ID
@@ -276,7 +277,7 @@ class TiledMap {
     Vec2i last_load_grid_ = Vec2i::Zero();  // 上次加载时的网格
     bool last_load_grid_set_ = false;       // 上次加载的flag
 
-    std::set<Vec2i, math::less_vec<2>> loaded_chunks_;  // 已经载入的区块，以网格ID为索引
+    std::set<Vec2i, math::less_vec<2>> loaded_chunks_;  // 已经载入的区块，以网格ID为索引（用于匹配的实时窗口地图），仅记录索引
     bool map_updated_ = false;
     bool dynamic_map_updated_ = false;
 

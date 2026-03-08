@@ -94,7 +94,7 @@ bool LidarLoc::Init(const std::string& config_path) {
     map_ = std::make_shared<TiledMap>(options_.map_option_);
     map_->LoadMapIndex();
 
-    auto fps = map_->GetAllFP();
+    auto fps = map_->GetAllFP(); // 获取所有功能点
     if (!fps.empty()) {
         map_->LoadOnPose(fps.front().pose_);
         /// 更新一次地图，保证有初始数据
@@ -356,6 +356,7 @@ bool LidarLoc::TryOtherSolution(CloudPtr input, SE3& pose) {
     return false;
 }
 
+// NOTE: 
 bool LidarLoc::UpdateGlobalMap() {
     NDTType::Ptr ndt(new NDTType());
     ndt->setResolution(1.0);

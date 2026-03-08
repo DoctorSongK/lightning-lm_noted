@@ -93,10 +93,10 @@ maps:
   delete_when_unload: false
   dyn_cloud_policy: persistent
   load_dyn_cloud: true
-  load_map_size: 2
+  load_map_size: 2     # 载入邻近网格数的距离
   max_pts_dyn_chunk: 100000
   save_dyn_when_quit: true
-  save_dyn_when_unload: false
+  save_dyn_when_unload: false   # 关于动态地图，设置false则直接清空动态chunk，设置true则在卸载时将动态chunk存盘（如果之前没有存过的话）
   unload_map_size: 4
   with_dyn_area: false
 pgo:
