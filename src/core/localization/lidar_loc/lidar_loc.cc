@@ -234,9 +234,9 @@ bool LidarLoc::YawSearch(SE3& pose, double& confidence, CloudPtr input, CloudPtr
     confidence = 0;
     bool yaw_search_success = false;
 
-    int step = lidar_loc::grid_search_angle_step;
+    int step = lidar_loc::grid_search_angle_step;  // 划分步长
     double radius = lidar_loc::grid_search_angle_range * constant::kDEG2RAD;
-    double angle_search_step = 2 * radius / step;
+    double angle_search_step = 2 * radius / step; // 角度搜索范围
 
     std::vector<double> searched_yaw;
     std::vector<double> scores(step);
@@ -289,6 +289,7 @@ bool LidarLoc::YawSearch(SE3& pose, double& confidence, CloudPtr input, CloudPtr
     return yaw_search_success;
 }
 
+// 使用功能点（初始位姿功能点）初始化当前位姿
 bool LidarLoc::InitWithFP(CloudPtr input, const SE3& fp_pose) {
     assert(input != nullptr && !input->empty());
 
@@ -488,7 +489,7 @@ void LidarLoc::Align(const CloudPtr& input) {
         SetInitRltState();
 
         if (initial_pose_set_) {
-            /// 尝试在给定点初始化
+            /// NOTE:尝试在给定点初始化，这里得分过高后loc_inited置为true，初始定位成功，后续不再尝试
             if (InitWithFP(input, initial_pose_)) {
                 LOG(INFO) << "init with external pose: " << initial_pose_.translation().transpose();
                 initial_pose_set_ = false;
@@ -545,11 +546,12 @@ void LidarLoc::Align(const CloudPtr& input) {
 
     /// 4. 设置当前帧对应的 pose guess
     /// NOTE: LO设置预测的位置和LidarLoc自身递推设置预测的方法并不完全一致，自身外推容易受噪声影响
-
+    
+    // last_abs_pose_为初始定位成功后的位姿，QUES: 关于后续更新是怎么操作的还没看着last_abs_pose_ 和 last_lo_pose_的更新逻辑暂时没找到
     SE3 guess_from_lo = last_abs_pose_;
     if (last_lo_pose_set_ && current_lo_pose_set_) {
         // 如果有里程计，则用两个时刻的相对定位来递推，估计一个当前pose的初值
-        const SE3 delta = last_lo_pose_.inverse() * current_lo_pose_;
+        const SE3 delta = last_lo_pose_.inverse() * current_lo_pose_;   // NOTE: 这里维护的是激光里程计相对值，将里程计转换到map坐标系下
         guess_from_lo = last_abs_pose_ * delta;
         // guess_from_lo.translation()[2] = 0;
         LOG(INFO) << "loc using lo guess: " << guess_from_lo.translation().transpose();
@@ -565,7 +567,7 @@ void LidarLoc::Align(const CloudPtr& input) {
             guess_from_self = pred;
         }
     }
-
+    //////////////////////////////////////////////////////////////看到这里啦/////////////////////////////////////////////
     SE3 guess_from_dr = guess_from_lo;
     if (last_dr_pose_set_ && current_dr_pose_set_) {
         const SE3 delta = last_dr_pose_.inverse() * current_dr_pose_;
@@ -886,6 +888,8 @@ bool LidarLoc::CheckStatic(double timestamp) {
     }
 }
 
+/// @brief 更新状态函数，仅更新上一时刻时间戳
+/// @param input 
 void LidarLoc::UpdateState(const CloudPtr& input) { last_timestamp_ = current_timestamp_; }
 
 void LidarLoc::SetInitRltState() {
@@ -918,7 +922,8 @@ bool LidarLoc::AssignLOPose(double timestamp) {
     if (pose_interp_success) {
         current_lo_pose_ = interp_pose;
         current_lo_pose_set_ = true;
-
+        
+        // 获得当前车体坐标系和世界坐标系的相对速度
         current_vel_b_ = best_match.GetRot().inverse() * best_match.GetVel();
         current_vel_ = best_match.GetVel();
 

@@ -761,6 +761,10 @@ inline bool PoseInterp(double query_time, C&& data, FT&& take_time_func, FP&& ta
 
     SE3 pose_first = take_pose_func(*match_iter);
     SE3 pose_next = take_pose_func(*match_iter_n);
+    // 线性插值，slerp是旋转插值算法
+    // 旋转插值算法：
+    // slerp = (sin((1 - s) * omega) / sin(omega)) * q1 + (sin(s * omega) / sin(omega)) * q2
+    // 其中，q1和q2是两个旋转的四元数表示，omega是它们之间的夹角，s是插值参数，取值范围为[0, 1]。
     result = {pose_first.unit_quaternion().slerp(s, pose_next.unit_quaternion()),
               pose_first.translation() * (1 - s) + pose_next.translation() * s};
     best_match = s < time_th ? *match_iter : *match_iter_n;
