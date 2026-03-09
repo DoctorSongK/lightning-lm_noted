@@ -29,6 +29,7 @@ bool TiledMap::ConvertFromFullPCD(CloudPtr map, const SE3& start_pose, const std
             int id = chunk_id_;
             auto new_chunk = std::make_shared<MapChunk>(id, grid, "");
             static_chunks_.emplace(grid, new_chunk);
+            // QUES: 这里是不是忘记AddPoint(点云数据)
             id_to_grid_.emplace(id, grid);
             chunk_id_++;
         }
@@ -38,6 +39,15 @@ bool TiledMap::ConvertFromFullPCD(CloudPtr map, const SE3& start_pose, const std
     return true;
 }
 
+/**
+ * @brief 将子图信息存储到index.txt文件内
+ * txt存储结构如下：
+ * line 1 -> 地图原点（默认为0）
+ * line 2 -> chunk_id， map坐标系下的子图索引坐标，
+ * 对应存储的pcd的名字；由于unordered_map是无序的，所以txt中的chunk_id是乱序或者倒序的 line 3 ->
+ * 所有功能点坐标（功能点类型，功能点坐标） pcd存储内容： 1、主地图各关键帧pcd 2、存储动态地图关键帧pcd
+ * @param only_dynamic
+ */
 void TiledMap::SaveToBin(bool only_dynamic) {
     LOG(INFO) << "map is saved to " << options_.map_path_ << ", sz: " << static_chunks_.size();
 
@@ -105,6 +115,13 @@ bool TiledMap::LoadMapIndex() {
             continue;
         }
 
+        // 将字符串转换为字符流
+        /**
+         * 常见典型用途
+         * 1、字符串->数值解析
+         * 2、数值->字符串拼接
+         * 3、字符串分割/解析复杂格式
+         */
         std::stringstream ss;
         ss << line;
 
@@ -274,10 +291,11 @@ void TiledMap::AddDynamicCloud(CloudPtr cloud) {
     flag_first_dynamic_scan_ = false;
 }
 
-// 基于当前位置pose完成地图的加载和卸载
+/// @brief NOTE: 滑动窗口实现部分，基于当前位置pose完成地图的加载和卸载
 void TiledMap::LoadOnPose(const SE3& pose) {
     Vec2d p = pose.translation().head<2>();
     auto this_grid = Pos2Grid(p);
+    // 如果上次已经对当前位置处的分割子图做了加载，就无需再次加载和更新啦
     if (last_load_grid_set_ && last_load_grid_ == this_grid) {
         map_updated_ = false;
         return;
@@ -300,8 +318,9 @@ void TiledMap::LoadOnPose(const SE3& pose) {
 
                 loaded_chunks_.emplace(cp.first);
             }
-            
+
             // 动态地图里没有的话新创建一个，如果在的话就判断是否被卸载，如果被卸载的话重新被加载。其他情况不做处理
+            // 关于动态地图的使用，是不是又是在重新构建地图，又是在哪里做的点云插入呢，点云质量如何保证？？？
             auto dyn_iter = dynamic_chunks_.find(cp.first);
             if (dyn_iter == dynamic_chunks_.end()) {
                 // 创建这个动态区块
@@ -334,6 +353,7 @@ void TiledMap::LoadOnPose(const SE3& pose) {
             iter = loaded_chunks_.erase(iter);
 
             auto d = dynamic_chunks_.find(g);
+            // SHORT 当机器人在窗口期内时保留，超范围直接清空动态地图点云
             if (options_.policy_ == DynamicCloudPolicy::SHORT && d != dynamic_chunks_.end()) {
                 dynamic_chunks_[g]->cloud_ = nullptr;
                 dynamic_map_updated_ = true;
@@ -345,7 +365,7 @@ void TiledMap::LoadOnPose(const SE3& pose) {
                     continue;
                 }
 
-                // 将本区块存盘并卸载点云，并记录在本地，前提是初始化了该参数
+                // 将本区块存盘并卸载点云，并记录在本地
                 if (options_.save_dyn_when_unload_) {
                     std::string filename = options_.map_path_ + "/" + std::to_string(d->second->id_) + "_dyn.pcd";
                     d->second->cloud_->width = d->second->cloud_->size();
@@ -365,6 +385,8 @@ void TiledMap::LoadOnPose(const SE3& pose) {
     last_load_grid_set_ = true;
 }
 
+/// @brief 加载现阶段窗口内所有块点云
+/// @return
 CloudPtr TiledMap::GetAllMap() {
     CloudPtr cloud(new PointCloudType);
     cloud->reserve(100000 * 25);

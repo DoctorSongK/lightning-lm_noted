@@ -629,7 +629,7 @@ inline SE3 XYZRPYToSE3(const PoseRPYD& pose) {
  * @param best_match_iter 查找到的最近匹配
  *
  * NOTE 要求query_time必须在data最大时间和最小时间之间(容许0.5s内误差)
- * data的map按时间排序
+ * --查询时间在队列外0.5s的误差以内时，则任务还有外推的必要-- data的map按时间排序
  * @return
  */
 template <typename T, typename C, typename FT, typename FP>
@@ -642,8 +642,10 @@ inline bool PoseInterp(double query_time, C&& data, FT&& take_time_func, FP&& ta
         return false;
     }
 
+    // 二分法，时间从两侧往里逼近
     double last_time = take_time_func(*data.rbegin());
     double first_time = take_time_func(*data.begin());
+    // 异常状况处理 -- start 查询时间不在队列中
     if (query_time > last_time) {
         if (verbose) {
             LOG(WARNING) << "query time is later than last time.";
@@ -725,6 +727,7 @@ inline bool PoseInterp(double query_time, C&& data, FT&& take_time_func, FP&& ta
             return true;
         }
     }
+    ///// 异常状况处理 -- end /////
 
     auto match_iter = data.begin();
     for (auto iter = data.begin(); iter != data.end(); ++iter) {

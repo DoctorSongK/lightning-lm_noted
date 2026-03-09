@@ -89,7 +89,7 @@ lidar_loc:
   update_kf_dis: 2.0
   update_lidar_loc_score: 2.5
 maps:
-  delete_when_unload: false
+  delete_when_unload: false     
   dyn_cloud_policy: persistent
   load_dyn_cloud: true
   load_map_size: 2

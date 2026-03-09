@@ -198,7 +198,7 @@ struct NavState {
     double timestamp_ = 0.0;           // 时间戳
     double confidence_ = 0.0;          // 定位置信度
     bool pose_is_ok_ = true;           // 定位是否有效
-    bool lidar_odom_reliable_ = true;  // lio是否有效
+    bool lidar_odom_reliable_ = true;  // lio是否有效 QUES: 这边是一直有效吗
     bool is_parking_ = false;          // 是否在停车
 
     Vec3d pos_ = Vec3d::Zero();             // 位置

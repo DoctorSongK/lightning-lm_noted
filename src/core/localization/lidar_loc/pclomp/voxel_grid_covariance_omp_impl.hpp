@@ -48,6 +48,7 @@
 #include "voxel_grid_covariance_omp.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// relative_coordinates 相对坐标转换值
 template <typename PointT>
 int pclomp::VoxelGridCovariance<PointT>::getNeighborhoodAtPoint(const Eigen::MatrixXi& relative_coordinates,
                                                                 const PointT& reference_point,
@@ -110,9 +111,9 @@ int pclomp::VoxelGridCovariance<PointT>::getNeighborhoodAtPoint1(const PointT& r
     return getNeighborhoodAtPoint(Eigen::MatrixXi::Zero(3, 1), reference_point, neighbors);
 }
 
-/// @brief 有点像增量式NDT的思想，先将点云加入到栅格中，然后计算每个栅格的协方差矩阵和中心点，避免全部卸载再加载
-/// @tparam PointT 
-/// @param target 
+/// @brief 有点像增量式NDT的思想，先将点云划分到体素内
+/// @tparam PointT
+/// @param target
 template <typename PointT>
 void pclomp::VoxelGridCovariance<PointT>::AddTarget(pclomp::VoxelGridCovariance<PointT>::PointCloudPtr target) {
     for (size_t cp = 0; cp < target->points.size(); ++cp) {
@@ -149,7 +150,7 @@ void pclomp::VoxelGridCovariance<PointT>::ComputeTargetGrids() {
         }
 
         // Eigen values and vectors calculated to prevent near singluar matrices
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigensolver;
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigensolver;  /// NOTE: 特征值分解：用于求矩阵的特征值和特征向量
         Eigen::Matrix3d eigen_val;
         Eigen::Vector3d pt_sum;
         double min_covar_eigvalue;
@@ -170,17 +171,20 @@ void pclomp::VoxelGridCovariance<PointT>::ComputeTargetGrids() {
         leaf.cov_ *= (leaf.nr_points - 1.0) / leaf.nr_points;
 
         // Normalize Eigen Val such that max no more than 100x min.
+        // 规范特征值，使最大值不超过最小值的100倍
         eigensolver.compute(leaf.cov_);
         eigen_val = eigensolver.eigenvalues().asDiagonal();
         auto evecs = eigensolver.eigenvectors();
 
+        // 理论上协方差不应该小于0
         if (eigen_val(0, 0) < 0 || eigen_val(1, 1) < 0 || eigen_val(2, 2) <= 0) {
             leaf.nr_points = -1;
             return;
         }
 
         // Avoids matrices near singularities (eq 6.11)[Magnusson 2009]
-
+        // 为避免协方差奇异，做以下操作
+        // 当体素内的点云处于平面时，点云Z方向几乎没有变化，进而导致z方向协方差≈0。这样在求逆的时候就会出现过大的值（异常）
         min_covar_eigvalue = min_covar_eigvalue_mult_ * eigen_val(2, 2);
         if (eigen_val(0, 0) < min_covar_eigvalue) {
             eigen_val(0, 0) = min_covar_eigvalue;
@@ -189,10 +193,10 @@ void pclomp::VoxelGridCovariance<PointT>::ComputeTargetGrids() {
                 eigen_val(1, 1) = min_covar_eigvalue;
             }
 
-            leaf.cov_ = evecs * eigen_val * evecs.inverse();
+            leaf.cov_ = evecs * eigen_val * evecs.inverse();  // 重构协方差 -- 矩阵特征值分解：U·V·U.trans
         }
 
-        leaf.icov_ = leaf.cov_.inverse();
+        leaf.icov_ = leaf.cov_.inverse();  // 后续NDT需要计算高斯函数，所以需要求逆
         if (leaf.icov_.maxCoeff() == std::numeric_limits<float>::infinity() ||
             leaf.icov_.minCoeff() == -std::numeric_limits<float>::infinity()) {
             leaf.nr_points = -1;

@@ -179,6 +179,7 @@ class TiledMap {
     bool MapUpdated() const { return map_updated_; }
     bool DynamicMapUpdated() const { return dynamic_map_updated_; }
 
+    /// @brief reset地图更新标志位
     void CleanMapUpdate() {
         map_updated_ = false;
         dynamic_map_updated_ = false;
@@ -211,6 +212,7 @@ class TiledMap {
     void SetNewTargetForNDT(T ndt) {
         bool has_cloud = false;
         {
+            // 向ndt中添加参考点云
             UL lock(static_data_mutex_);
             for (auto& idx : loaded_chunks_) {
                 if (!static_chunks_[idx]->cloud_->empty()) {
@@ -233,6 +235,7 @@ class TiledMap {
             }
         }
 
+        // 计算所有体素的均值和协方差
         ndt->ComputeTargetGrids();
         if (has_cloud) {
             ndt->initCompute();
@@ -252,6 +255,7 @@ class TiledMap {
 
    private:
     /// 注意这里有个边长
+    /// 这里算出来的索引不是栅格地图中类似的，实际原点就是原点不是左上角，索引就会出现负值
     inline Vec2i Pos2Grid(const Vec2f& pt) const {
         Vec2d p = ((pt.cast<double>() * options_.inv_chunk_size_) + Vec2d(0.5, 0.5));
         return Vec2i(floor(p[0]), floor(p[1]));
@@ -277,7 +281,8 @@ class TiledMap {
     Vec2i last_load_grid_ = Vec2i::Zero();  // 上次加载时的网格
     bool last_load_grid_set_ = false;       // 上次加载的flag
 
-    std::set<Vec2i, math::less_vec<2>> loaded_chunks_;  // 已经载入的区块，以网格ID为索引（用于匹配的实时窗口地图），仅记录索引
+    std::set<Vec2i, math::less_vec<2>>
+        loaded_chunks_;  // 已经载入的区块，以网格ID为索引（用于匹配的实时窗口地图），仅记录索引
     bool map_updated_ = false;
     bool dynamic_map_updated_ = false;
 

@@ -37,7 +37,7 @@ class LidarLoc {
         bool display_realtime_cloud_ = false;          // 是否显示实时点云
         bool debug_ = false;                           // 是否使用单测模式
         LocMethod match_method_ = LocMethod::NDT_OMP;  // 匹配方式
-        bool force_2d_ = true;                        // 强制在2D空间
+        bool force_2d_ = true;                         // 强制在2D空间
         float min_init_confidence_ = 0.1;              // 初始化时要求的最小分值
         bool init_with_fp_ = true;                     // 是否使用功能点进行初始化
         bool enable_parking_static_ = false;           // 是否在静止时输出固定位置
@@ -57,9 +57,10 @@ class LidarLoc {
         double update_kf_dis_ = 5.0;           // 每隔多少米更新一次
         double update_kf_time_ = 10.0;         // 每隔多少时间更新一次
         double update_lidar_loc_score_ = 2.2;  // 更新时激光定位匹配分值阈值
-        double lidar_loc_odom_th_ = 0.3;       // 激光两帧匹配结果与对应lidarodom结果差的阈值，超过则认为lidarodom异常
+        double lidar_loc_odom_th_ = 0.3;  // 激光两帧匹配结果与对应lidarodom结果差的阈值，超过则认为lidarodom异常
 
         double max_update_cache_dis_ = 30.0;  // 更新动态图层的缓冲距离
+        // TODO: 恢复位姿路径（功能点）
         std::string recover_pose_path_ = "./data/recover_pose.txt";
     };
 
@@ -131,7 +132,6 @@ class LidarLoc {
 
     /// 激光定位是否认为LO有效
     bool LidarLocThinkLOReliable() { return lo_reliable_; }
-
 
    private:
     // 内部函数  ==========================================================================

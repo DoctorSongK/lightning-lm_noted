@@ -52,7 +52,7 @@ bool Localization::Init(const std::string& yaml_path, const std::string& global_
     lidar_loc_->Init(yaml_path);
 
     /// pose graph
-    //QUES: 这里的PGO和建图是miao为啥不一样呢，难道这个不是以边和节点的形式？？类似与ceres的那种？
+    // QUES: 这里的PGO和建图是miao为啥不一样呢，难道这个不是以边和节点的形式？？类似与ceres的那种？
     pgo_ = std::make_shared<PGO>();
     pgo_->SetDebug(false);
 
@@ -140,7 +140,7 @@ void Localization::ProcessLidarMsg(const sensor_msgs::msg::PointCloud2::SharedPt
     preprocess_->Process(cloud, laser_cloud);
     // QUES: 这边时间戳单位为ns，建图时我记得是ns
     laser_cloud->header.stamp = cloud->header.stamp.sec * 1e9 + cloud->header.stamp.nanosec;
-    
+
     // step2: 定位点云处理流程 -- 异步处理线程添加数据（lio 和 lidar_loc_）
     if (options_.online_mode_) {
         lidar_odom_proc_cloud_.AddMessage(laser_cloud);
@@ -203,8 +203,9 @@ void Localization::LidarOdomProcCloud(CloudPtr cloud) {
     }
 
     lio_kf_ = kf;
-    
+
     // scan是去畸变后的点云
+    // QUES: 这里也没做mutex，会不会出现另一帧到达，对上一次处理的点云做了一小部分更新（多处写入）
     auto scan = lio_->GetScanUndist();
 
     if (options_.online_mode_) {
@@ -215,7 +216,7 @@ void Localization::LidarOdomProcCloud(CloudPtr cloud) {
 }
 
 void Localization::LidarLocProcCloud(CloudPtr scan_undist) {
-    // 展开lidar_loc的处理流程
+    // 匹配主流程 -- 展开lidar_loc的处理流程
     lidar_loc_->ProcessCloud(scan_undist);
 
     auto res = lidar_loc_->GetLocalizationResult();
@@ -236,7 +237,6 @@ void Localization::LidarLocProcCloud(CloudPtr scan_undist) {
 
 /// IMU处理流程
 void Localization::ProcessIMUMsg(IMUPtr imu) {
-    
     UL lock(global_mutex_);
 
     if (lidar_loc_ == nullptr || lio_ == nullptr || pgo_ == nullptr) {

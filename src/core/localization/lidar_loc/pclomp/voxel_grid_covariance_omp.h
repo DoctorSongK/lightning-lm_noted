@@ -152,7 +152,8 @@ class VoxelGridCovariance : public pcl::VoxelGrid<PointT> {
     }
 
     /** \brief Set the minimum number of points required for a cell to be used (must be 3 or greater for covariance
-     * calculation). \param[in] min_points_per_voxel the minimum number of points for required for a voxel to be used
+     * calculation). 设置一个单元格被使用所需的最少点数（协方差计算必须为3或更多）
+     * \param[in] min_points_per_voxel the minimum number of points for required for a voxel to be used
      */
     inline void setMinPointPerVoxel(int min_points_per_voxel) {
         if (min_points_per_voxel > 2) {
@@ -164,20 +165,21 @@ class VoxelGridCovariance : public pcl::VoxelGrid<PointT> {
         }
     }
 
-    /** \brief Get the minimum number of points required for a cell to be used.
+    /** \brief Get the minimum number of points required for a cell to be used. 获取一个单元格被使用所需的最少点数
      * \return the minimum number of points for required for a voxel to be used
      */
     inline int getMinPointPerVoxel() { return min_points_per_voxel_; }
 
     /** \brief Set the minimum allowable ratio between eigenvalues to prevent singular covariance matrices.
-     * \param[in] min_covar_eigvalue_mult the minimum allowable ratio between eigenvalues
+     * 设置特征值之间允许的最小比率以防止奇异协方差矩阵 \param[in] min_covar_eigvalue_mult the minimum allowable ratio
+     * between eigenvalues
      */
     inline void setCovEigValueInflationRatio(double min_covar_eigvalue_mult) {
         min_covar_eigvalue_mult_ = min_covar_eigvalue_mult;
     }
 
     /** \brief Get the minimum allowable ratio between eigenvalues to prevent singular covariance matrices.
-     * \return the minimum allowable ratio between eigenvalues
+     * 获取特征值之间允许的最小比率以防止协方差矩阵奇异 \return the minimum allowable ratio between eigenvalues
      */
     inline double getCovEigValueInflationRatio() { return min_covar_eigvalue_mult_; }
 
@@ -207,17 +209,20 @@ class VoxelGridCovariance : public pcl::VoxelGrid<PointT> {
     void AddTarget(PointCloudPtr target);
 
     /// compute the cov and inv cov of each grid, paralleled
+    /// 平行计算每个体素中协方差
     void ComputeTargetGrids();
 
    protected:
     /** \brief Minimum points contained with in a voxel to allow it to be useable. */
-    int min_points_per_voxel_;
+    int min_points_per_voxel_;  ///@brief 每个体素里需至少含有的点数
 
     /** \brief Minimum allowable ratio between eigenvalues to prevent singular covariance matrices. */
+    // 防止协方差矩阵奇异的特征值之间的最小允许比率
     double min_covar_eigvalue_mult_;
 
     /** \brief Voxel structure containing all leaf nodes (includes voxels with less than a sufficient number of points).
      */
+    /// @brief 用无序map存储leaf, key为Pt2Key转换值
     HashMap leaves_;
 };
 

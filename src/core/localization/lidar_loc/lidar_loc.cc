@@ -94,7 +94,7 @@ bool LidarLoc::Init(const std::string& config_path) {
     map_ = std::make_shared<TiledMap>(options_.map_option_);
     map_->LoadMapIndex();
 
-    auto fps = map_->GetAllFP(); // 获取所有功能点
+    auto fps = map_->GetAllFP();  // 获取所有功能点
     if (!fps.empty()) {
         map_->LoadOnPose(fps.front().pose_);
         /// 更新一次地图，保证有初始数据
@@ -121,6 +121,9 @@ bool LidarLoc::Init(const std::string& config_path) {
     return true;
 }
 
+/// @brief 纯激光匹配关键函数
+/// @param cloud_input
+/// @return
 bool LidarLoc::ProcessCloud(CloudPtr cloud_input) {
     assert(cloud_input != nullptr);
 
@@ -136,6 +139,7 @@ bool LidarLoc::ProcessCloud(CloudPtr cloud_input) {
     // voxel.setLeafSize(sz, sz, sz);
     // voxel.setInputCloud(cloud_input);
     // voxel.filter(*cloud);
+    // QUES: 此处激光点云是去畸变的未经体素滤波的激光点，这样匹配点数不多吗？？？
 
     current_scan_ = cloud_input;
 
@@ -159,6 +163,9 @@ NavState LidarLoc::GetState() {
     return ns;
 }
 
+/// @brief IMU预测航迹推算函数，仅用于接收时间顺序排列的位姿序列，超1000剔除
+/// @param state
+/// @return
 bool LidarLoc::ProcessDR(const NavState& state) {
     // 未初始化成功的数据不接收
     if (!state.pose_is_ok_) {
@@ -182,6 +189,9 @@ bool LidarLoc::ProcessDR(const NavState& state) {
     return true;
 }
 
+/// @brief 接收激光里程计的主函数，接收顺序激光里程计位姿序列，超50剔除
+/// @param state
+/// @return
 bool LidarLoc::ProcessLO(const NavState& state) {
     /// 理论上相对定位是按时间顺序到达的
     UL lock(lo_pose_mutex_);
@@ -356,7 +366,7 @@ bool LidarLoc::TryOtherSolution(CloudPtr input, SE3& pose) {
     return false;
 }
 
-// NOTE: 
+// NOTE: 完成当前更新地图的ndt、icp等算法注册
 bool LidarLoc::UpdateGlobalMap() {
     NDTType::Ptr ndt(new NDTType());
     ndt->setResolution(1.0);
@@ -390,9 +400,11 @@ bool LidarLoc::UpdateGlobalMap() {
         CloudPtr map_cloud(new PointCloudType);
         pcl::VoxelGrid<PointType> voxel;
         auto sz = 0.5;
+        //对加载的窗口全局地图做体素
         voxel.setLeafSize(sz, sz, sz);
         voxel.setInputCloud(map_->GetAllMap());
         voxel.filter(*map_cloud);
+        //后再做icp匹配
         icp->setInputTarget(map_cloud);
         icp->setMaximumIterations(4);
         icp->setTransformationEpsilon(0.01);
@@ -404,6 +416,7 @@ bool LidarLoc::UpdateGlobalMap() {
 
 void LidarLoc::UpdateMapThread() {
     LOG(INFO) << "UpdateMapThread thread is running";
+    // 当滑动窗口变化时，静态地图和动态地图均产生更新
     while (!update_map_quit_) {
         if (map_->MapUpdated() || map_->DynamicMapUpdated()) {
             UpdateGlobalMap();
@@ -429,6 +442,7 @@ void LidarLoc::SetInitialPose(SE3 init_pose) {
     LOG(INFO) << "Set initial pose is: " << initial_pose_.translation().transpose();
 }
 
+/// @brief 雷达定位的关节接口，贼长~
 void LidarLoc::Align(const CloudPtr& input) {
     // 输入必须非空
     assert(input != nullptr);
