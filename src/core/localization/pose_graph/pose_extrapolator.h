@@ -63,7 +63,7 @@ class PoseExtrapolator {
 
     // 当前平移误差
     // 当前旋转误差
-    bool pgo_compensate_trans_needed_ = false;
+    bool pgo_compensate_trans_needed_ = false;  // compensate补偿
     bool pgo_compensate_rot_needed_ = false;
     Vec3d pgo_curr_trans_gap_;  // local系
     Vec3d pgo_curr_rot_gap_;    // 轴角旋转

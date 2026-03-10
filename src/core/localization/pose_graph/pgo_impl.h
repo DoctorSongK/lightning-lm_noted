@@ -43,30 +43,30 @@ struct PGOFrame {
     // double rtk_delta_t_          = 0;  // 插值时，bestmatch相对于上一帧rtk消息的时延
     // double rtk_interp_time_error = 0;  // 当前帧在rtk队列上做插值时的时间误差
     // common::UTMCoordinate rtk_utm_;    // 与PGO帧最接近的原始RTK观测
-    // double rtk_chi2_ = 0.0;            // RTK卡方误差
+    // double rtk_chi2_ = 0.0;            // RTK卡方误差 卡方误差 = r 协方差矩阵 r.tran
 
     // 激光定位观测 | 提供绝对约束
-    bool lidar_loc_set_ = false;                         // lidarLoc是否已经设置（PGO由lodarLoc触发，正常是有效的）
-    bool lidar_loc_valid_ = false;                       // lidarLoc是否有效（只要设置了就有效）
-    bool lidar_loc_inlier_ = true;                       // lidarLoc在PGO看来是否为inlier
-    SE3 lidar_loc_pose_;                                 // lidarLoc定位观测
-    double lidar_loc_delta_t_ = 0;                       // 插值时，bestmatch相对于上一帧lidarLoc消息的时延
-    double confidence_ = 0;                              // lidarLoc给出的原始置信度
+    bool lidar_loc_set_ = false;    // lidarLoc是否已经设置（PGO由lodarLoc触发，正常是有效的）
+    bool lidar_loc_valid_ = false;  // lidarLoc是否有效（只要设置了就有效）
+    bool lidar_loc_inlier_ = true;  // lidarLoc在PGO看来是否为inlier    绝对观测点就是内点，基于该观测做优化的点
+    SE3 lidar_loc_pose_;            // lidarLoc定位观测
+    double lidar_loc_delta_t_ = 0;  // 插值时，bestmatch相对于上一帧lidarLoc消息的时延
+    double confidence_ = 0;         // lidarLoc给出的原始置信度
     Vec6d lidar_loc_normalized_weight_ = Vec6d::Ones();  // 归一化权重，表征退化情况，位于(0, 1]区间，平移在前旋转在后
-    bool lidar_loc_rot_degenerated = false;              // 根据归一化权重来决定
-    bool lidar_loc_trans_degenerated = false;            // 根据归一化权重来决定
-    double lidar_loc_chi2_ = 0.0;                        // lidarLoc观测的卡方误差
+    bool lidar_loc_rot_degenerated = false;    // 根据归一化权重来决定
+    bool lidar_loc_trans_degenerated = false;  // 根据归一化权重来决定
+    double lidar_loc_chi2_ = 0.0;              // lidarLoc观测的卡方误差
 
     // 激光里程计观测 | 提供帧间相对约束
-    bool lidar_odom_set_ = false;                         // LO是否已经设置（由lidarLoc设置或者PGO中插值）
-    bool lidar_odom_valid_ = false;                       // LO是否有效（只要设置了就是有效）
-    SE3 lidar_odom_pose_;                                 // LO自系位姿观测
-    double lidar_odom_delta_t_ = 0;                       // 插值时，bestmatch相对于上一帧lidarOdom消息的时延
+    bool lidar_odom_set_ = false;    // LO是否已经设置（由lidarLoc设置或者PGO中插值）
+    bool lidar_odom_valid_ = false;  // LO是否有效（只要设置了就是有效）
+    SE3 lidar_odom_pose_;            // LO自系位姿观测
+    double lidar_odom_delta_t_ = 0;  // 插值时，bestmatch相对于上一帧lidarOdom消息的时延
     Vec6d lidar_odom_normalized_weight_ = Vec6d::Ones();  // 归一化权重，表征退化情况，位于(0, 1]区间，平移在前旋转在后
-    bool lidar_odom_rot_degenerated = false;              // 根据归一化权重来决定（无论是否退化都会添加约束）
-    bool lidar_odom_trans_degenerated = false;            // 根据归一化权重来决定
-    Vec3d lidar_odom_vel_ = Vec3d::Zero();                // 删除这个量？
-    double lidar_odom_chi2_ = 0.;                         // LO观测的卡方误差
+    bool lidar_odom_rot_degenerated = false;  // 根据归一化权重来决定（无论是否退化都会添加约束）
+    bool lidar_odom_trans_degenerated = false;  // 根据归一化权重来决定
+    Vec3d lidar_odom_vel_ = Vec3d::Zero();      // 删除这个量？
+    double lidar_odom_chi2_ = 0.;               // LO观测的卡方误差
     bool lo_reliable_ = true;
 
     // DR观测 | 提供帧间相对约束
@@ -96,11 +96,11 @@ struct PGOImpl {
 
     struct Options {
         Options() {}
-        bool verbose_ = false;                                                  // 调试打印
-        static constexpr int PGO_MAX_FRAMES = 5;                               // PGO所持的最大帧数
-        static constexpr int PGO_MAX_SIZE_OF_RELATIVE_POSE_QUEUE = 10000;      // PGO 相对定位队列最大长度
-        static constexpr int PGO_MAX_SIZE_OF_RTK_POSE_QUEUE = 200;             // PGO RTK观测队列最大长度
-        static constexpr double PGO_DISTANCE_TH_LAST_FRAMES = 2.5;             // PGO 滑窗时，最近两帧的最小距离
+        bool verbose_ = false;                                             // 调试打印
+        static constexpr int PGO_MAX_FRAMES = 5;                           // PGO所持的最大帧数
+        static constexpr int PGO_MAX_SIZE_OF_RELATIVE_POSE_QUEUE = 10000;  // PGO 相对定位队列最大长度
+        static constexpr int PGO_MAX_SIZE_OF_RTK_POSE_QUEUE = 200;         // PGO RTK观测队列最大长度
+        static constexpr double PGO_DISTANCE_TH_LAST_FRAMES = 2.5;  // PGO 滑窗时，最近两帧的最小距离
         static constexpr double PGO_ANGLE_TH_LAST_FRAMES = 10 * M_PI / 360.0;  // PGO 滑窗时，最近两帧的最小角度
 
         double lidar_loc_pos_noise = 0.3;                             // lidar定位位置噪声 // 0.3

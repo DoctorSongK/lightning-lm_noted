@@ -17,6 +17,7 @@ namespace lightning::loc {
  * 输入：
  * -- DR，需要降低对此的依赖（轮速失效case较多），兼容没有DR
  * -- LiDAR Odom，频率可能不高，比如5Hz；lidarOdom应该提供自己的hessian矩阵的PCA分析，提供退化情况参考
+ * TODO:不应该只使用过小特征值作为退化判断，而是应用条件数cond = lamd_max / lamd_min (对特征值排序，选最大最小)
  * -- LiDAR Loc，频率可能也不高，可动态配置
  *
  * 输出：
@@ -70,6 +71,7 @@ class PGO {
     bool imu_interruption_tag_ = false;      // imu断流标志位
 
    private:
+    // 相对姿态队列是否为空
     inline bool RelativePoseQueueEmpty() {
         return (impl_->dr_pose_queue_.empty() && impl_->lidar_odom_pose_queue_.empty());
     }

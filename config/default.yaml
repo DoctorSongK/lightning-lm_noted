@@ -87,8 +87,8 @@ lidar_loc:
   update_dynamic_cloud: true
   update_err_h: 0.2
   update_err_v: 0.2
-  update_kf_dis: 2.0
-  update_lidar_loc_score: 2.5
+  update_kf_dis: 2.0            #更新地图时搁多远插入一帧
+  update_lidar_loc_score: 2.5   #更新动态地图是激光匹配的最小得分
 maps:
   delete_when_unload: false   # PERSISTENT状态下动态地图卸载时是否需要清空
   dyn_cloud_policy: persistent

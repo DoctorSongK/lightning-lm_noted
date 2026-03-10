@@ -281,6 +281,7 @@ void Localization::ProcessIMUMsg(IMUPtr imu) {
     pgo_->ProcessDR(dr_state);
 }
 
+// TODO: 保留对轮式里程计的应用，后面可以加一下
 // void Localization::ProcessOdomMsg(const nav_msgs::msg::Odometry::SharedPtr odom_msg) {
 //     UL lock(global_mutex_);
 //

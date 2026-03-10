@@ -22,8 +22,13 @@ void PGO::SetHighFrequencyGlobalOutputHandleFunction(PGO::GlobalOutputHandleFunc
     high_freq_output_func_ = std::move(handle);
 }
 
+/**
+ * @brief 发布高频定位信号
+ *
+ */
 void PGO::PubResult() {
     // 在有需要时，高频外推然后向外发送数据
+    // impl_->result_.valid_ 应该是初始定位未完成前，这里是不做处理的
     if (high_freq_output_func_ && impl_->result_.valid_) {
         // 检查激光定位分值情况
         if (last_lidar_loc_time_ > 0 && impl_->result_.timestamp_ > last_lidar_loc_time_) {
@@ -152,12 +157,15 @@ bool PGO::ProcessDR(const NavState& dr_result) {
     }
 
     impl_->dr_pose_queue_.emplace_back(dr_result);
+
+    // NOTE: 下面几句话屁用没有啊
     if (impl_->dr_pose_queue_.size() > 1) {
         auto curr_it = impl_->dr_pose_queue_.rbegin();
         auto last_it = curr_it;
         ++last_it;
         // curr_it->delta_t_ = curr_it->timestamp_ - last_it->timestamp_;
     }
+    //
 
     while (impl_->dr_pose_queue_.size() >= pgo::PGO_MAX_SIZE_OF_RELATIVE_POSE_QUEUE) {
         impl_->dr_pose_queue_.pop_front();

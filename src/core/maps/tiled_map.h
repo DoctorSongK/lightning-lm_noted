@@ -210,6 +210,7 @@ class TiledMap {
 
     template <class T>
     void SetNewTargetForNDT(T ndt) {
+        // NOTE: 需要注意的是加载时，要求对静态、动态地图的相同id进行加载，不是grid
         bool has_cloud = false;
         {
             // 向ndt中添加参考点云

@@ -236,7 +236,7 @@ bool LidarLoc::YawSearch(SE3& pose, double& confidence, CloudPtr input, CloudPtr
 
     int step = lidar_loc::grid_search_angle_step;  // 划分步长
     double radius = lidar_loc::grid_search_angle_range * constant::kDEG2RAD;
-    double angle_search_step = 2 * radius / step; // 角度搜索范围
+    double angle_search_step = 2 * radius / step;  // 角度搜索范围
 
     std::vector<double> searched_yaw;
     std::vector<double> scores(step);
@@ -302,6 +302,7 @@ bool LidarLoc::InitWithFP(CloudPtr input, const SE3& fp_pose) {
     if (loc_inited_) {
         current_timestamp_ = math::ToSec(input->header.stamp);
         localization_result_.confidence_ = fitness_score;
+        // 定位初始化时，固定abs_pose
         current_abs_pose_ = pose_esti;
         localization_result_.pose_ = pose_esti;
         localization_result_.timestamp_ = current_timestamp_;
@@ -317,7 +318,7 @@ bool LidarLoc::InitWithFP(CloudPtr input, const SE3& fp_pose) {
 
         if (current_lo_pose_set_) {
             // 设置上一次的相对定位结果
-            last_lo_pose_ = current_lo_pose_;
+            last_lo_pose_ = current_lo_pose_;  // 这里应该是0
             last_lo_pose_set_ = true;
 
             last_dr_pose_ = current_dr_pose_;
@@ -367,7 +368,7 @@ bool LidarLoc::TryOtherSolution(CloudPtr input, SE3& pose) {
     return false;
 }
 
-// NOTE: 完成当前更新地图的ndt、icp等算法注册
+// NOTE: 完成当前更新地图的ndt、icp等算法注册，更新时会将新的点云加载到ndt中（尤其在加载动态地图和分片地图时
 bool LidarLoc::UpdateGlobalMap() {
     NDTType::Ptr ndt(new NDTType());
     ndt->setResolution(1.0);
@@ -443,7 +444,7 @@ void LidarLoc::SetInitialPose(SE3 init_pose) {
     LOG(INFO) << "Set initial pose is: " << initial_pose_.translation().transpose();
 }
 
-/// @brief 雷达定位的关节接口，贼长~
+/// @brief 雷达定位的关键接口，贼长~
 void LidarLoc::Align(const CloudPtr& input) {
     // 输入必须非空
     assert(input != nullptr);
@@ -546,17 +547,20 @@ void LidarLoc::Align(const CloudPtr& input) {
 
     /// 4. 设置当前帧对应的 pose guess
     /// NOTE: LO设置预测的位置和LidarLoc自身递推设置预测的方法并不完全一致，自身外推容易受噪声影响
-    
-    // last_abs_pose_为初始定位成功后的位姿，QUES: 关于后续更新是怎么操作的还没看着last_abs_pose_ 和 last_lo_pose_的更新逻辑暂时没找到
+
+    // last_abs_pose_为初始定位成功后的位姿
+    // QUES: 关于后续更新是怎么操作的还没看着last_abs_pose_ 和last_lo_pose_的更新逻辑暂时没找到
     SE3 guess_from_lo = last_abs_pose_;
     if (last_lo_pose_set_ && current_lo_pose_set_) {
         // 如果有里程计，则用两个时刻的相对定位来递推，估计一个当前pose的初值
-        const SE3 delta = last_lo_pose_.inverse() * current_lo_pose_;   // NOTE: 这里维护的是激光里程计相对值，将里程计转换到map坐标系下
+        const SE3 delta = last_lo_pose_.inverse() *
+                          current_lo_pose_;  // NOTE: 这里维护的是激光里程计相对值，将里程计转换到map坐标系下
         guess_from_lo = last_abs_pose_ * delta;
         // guess_from_lo.translation()[2] = 0;
         LOG(INFO) << "loc using lo guess: " << guess_from_lo.translation().transpose();
     }
 
+    // 如果已经存在雷达定位位姿，就用该雷达匹配位姿做外推；没有的话依旧使用激光里程计
     SE3 guess_from_self = guess_from_lo;
     if (lidar_loc_pose_queue_.size() >= 2) {
         SE3 pred;
@@ -567,7 +571,8 @@ void LidarLoc::Align(const CloudPtr& input) {
             guess_from_self = pred;
         }
     }
-    //////////////////////////////////////////////////////////////看到这里啦/////////////////////////////////////////////
+
+    // 如果imu航迹推算可行，则计算出航迹推算位姿
     SE3 guess_from_dr = guess_from_lo;
     if (last_dr_pose_set_ && current_dr_pose_set_) {
         const SE3 delta = last_dr_pose_.inverse() * current_dr_pose_;
@@ -575,6 +580,8 @@ void LidarLoc::Align(const CloudPtr& input) {
         // guess_from_dr.translation()[2] = 0;
     }
 
+    // QUES: 截止上面的推导，这个last_dr_pose、lasr_lo_pose难道和last_abs_pose是一同更新的吗
+    // QUES:个人感觉这边比较信任激光里程计，如果激光里程计与DR有较大出入时，就尝试DR，那如果是DR本身有问题呢？？？误差也会变大，岂不是不应该尝试
     bool try_dr = false;
     if (((guess_from_dr.translation() - guess_from_lo.translation()).norm() >= try_other_guess_trans_th_ ||
          (guess_from_dr.so3().inverse() * guess_from_lo.so3()).log().norm() >= try_other_guess_rot_th_)) {
@@ -584,6 +591,7 @@ void LidarLoc::Align(const CloudPtr& input) {
         try_dr = true;
     }
 
+    // 如果自身姿势外插器计算的位姿和DR、激光里程计都有较大误差，则尝试一下自己位姿外插的
     bool try_self = false;
     if (((guess_from_self.translation() - guess_from_lo.translation()).norm() >= try_other_guess_trans_th_ ||
          (guess_from_self.so3().inverse() * guess_from_lo.so3()).log().norm() >= try_other_guess_rot_th_) &&
@@ -603,9 +611,10 @@ void LidarLoc::Align(const CloudPtr& input) {
     loc_success_lo = loc_success_self = loc_success_dr = false;
     bool loc_success = false;
 
-    /// 注意load on pose存在滞后，优先load on DR
+    /// NOTE: 注意load on pose存在滞后，优先load on DR
     map_->LoadOnPose(guess_from_dr);
 
+    // 基于雷达里程计推算出的位姿做激光ndt匹配
     loc_success_lo = Localize(current_pose_esti, fitness_score, input, output_cloud);  // LO 那个肯定会算
     double score_lo = fitness_score;
 
@@ -644,7 +653,7 @@ void LidarLoc::Align(const CloudPtr& input) {
         }
     }
 
-    /// NOTE 如果LO, DR出发点和收敛点不同，但分值相近，说明场景可能处在退化状态，此时使用DR预测的Pose
+    /// NOTE: 退化判断： 如果LO, DR出发点和收敛点不同，但分值相近，说明场景可能处在退化状态，此时使用DR预测的Pose
     if (try_dr && (res_of_lo.translation() - res_of_dr.translation()).head<2>().norm() > 0.2 &&
         fabs(score_lo - score_dr) < 0.2 && score_lo < 1.2) {
         LOG(WARNING) << "判定激光定位进入退化状态，现在会使用DR递推pose而不是激光定位位置";
@@ -670,6 +679,7 @@ void LidarLoc::Align(const CloudPtr& input) {
         LOG(INFO) << "loc success is false.";
     }
 
+    // QUES: 要是失败的话，就一直不更新相关历史位姿,感觉这里有点问题
     if (loc_success) {
         lidar_loc_odom_valid = CheckLidarOdomValid(current_pose_esti, delta_rel_abs_pose);
         last_timestamp_ = current_timestamp_;  // 成功时，更新上一时刻激光定位时间
@@ -683,6 +693,7 @@ void LidarLoc::Align(const CloudPtr& input) {
     }
 
     /// 确定激光定位是否满足平滑性要求
+    /// QUES: 这里又有什么用？？？
     Vec3d dpred = current_abs_pose_.translation() - guess_from_self.translation();
     if (fabs(dpred[0]) < 0.5 && fabs(dpred[1]) < 0.5 &&
         (current_abs_pose_.so3().inverse() * guess_from_self.so3()).log().norm() < 2.0 * M_PI / 180.0) {
@@ -696,6 +707,7 @@ void LidarLoc::Align(const CloudPtr& input) {
 
     /// 7. 输出结果
     {
+        // NOTE: 这个方式可以参考，可以保证不那么容易丢定位
         UL lock(result_mutex_);
         localization_result_.timestamp_ = current_timestamp_;
         localization_result_.confidence_ = fitness_score;
@@ -768,6 +780,8 @@ void LidarLoc::Align(const CloudPtr& input) {
     }
 
     /// 9. save for recover pose
+    /// 记录任务常来往位姿，用于恢复定位
+    // QUES: 难道是一直存吗？？？
     recover_pose_out_.open(options_.recover_pose_path_);
     if (recover_pose_out_) {
         Vec3d t = current_pose_esti.translation();
@@ -778,6 +792,15 @@ void LidarLoc::Align(const CloudPtr& input) {
     }
 }
 
+/**
+ * @brief
+ * 通过输入最终定位值与激光里程计区间位姿差，判断激光里程计是否失效|另外一个重要点，对历史abs_pose、lo_pose、dr_pose做更新
+ *
+ * @param current_pose_esti 确定的定位值（可能是激光里程计、雷达位姿外插值、惯导值）
+ * @param delta_posi
+ * @return true
+ * @return false
+ */
 bool LidarLoc::CheckLidarOdomValid(const SE3& current_pose_esti, double& delta_posi) {
     delta_posi = ((last_lo_pose_.inverse() * current_lo_pose_).translation() -
                   (last_abs_pose_.inverse() * current_pose_esti).translation())
@@ -794,11 +817,12 @@ bool LidarLoc::CheckLidarOdomValid(const SE3& current_pose_esti, double& delta_p
         LOG(INFO) << "Lidar Loc计算相对pose: " << last_abs_pose_.translation().transpose() << " "
                   << current_pose_esti.translation().transpose() << " "
                   << (last_abs_pose_.inverse() * current_pose_esti).translation().transpose();
-        lo_reliable_ = false;
+        lo_reliable_ = false;  // 认为激光里程计可靠性差
         lo_reliable_cnt_ = 10;
         valid = false;
     }
 
+    // 全局位姿更新的同时，其余位姿一块更新
     last_abs_pose_ = current_pose_esti;
     last_lo_pose_ = current_lo_pose_;
     last_lo_pose_set_ = true;
@@ -808,6 +832,13 @@ bool LidarLoc::CheckLidarOdomValid(const SE3& current_pose_esti, double& delta_p
     return valid;
 }
 
+/// @brief 雷达定位函数（包含NDT和ICP)
+/// @param pose
+/// @param confidence
+/// @param input
+/// @param output
+/// @param use_rough_res
+/// @return
 bool LidarLoc::Localize(SE3& pose, double& confidence, CloudPtr input, CloudPtr output, bool use_rough_res) {
     Eigen::Matrix4f trans;
     bool loc_success = false;
@@ -855,6 +886,7 @@ bool LidarLoc::Localize(SE3& pose, double& confidence, CloudPtr input, CloudPtr 
         float d = (trans.block<3, 1>(0, 3) - adjust_trans.block<3, 1>(0, 3)).norm();
         LOG(INFO) << "icp ajust d: " << d << ", a: " << a;
 
+        // NOTE: 如果icp计算结果的误差大小过大，就不用这个调整啦
         if (pcl_icp_->hasConverged() && std::fabs(d) <= 0.05 && std::fabs(a) <= 0.05) {
             LOG(INFO) << "icp ajust trans set success";
             trans = adjust_trans;
@@ -889,9 +921,10 @@ bool LidarLoc::CheckStatic(double timestamp) {
 }
 
 /// @brief 更新状态函数，仅更新上一时刻时间戳
-/// @param input 
+/// @param input
 void LidarLoc::UpdateState(const CloudPtr& input) { last_timestamp_ = current_timestamp_; }
 
+/// @brief 设置初始化定位状态
 void LidarLoc::SetInitRltState() {
     UL lock(result_mutex_);
     localization_result_.confidence_ = 0.0;
@@ -922,7 +955,7 @@ bool LidarLoc::AssignLOPose(double timestamp) {
     if (pose_interp_success) {
         current_lo_pose_ = interp_pose;
         current_lo_pose_set_ = true;
-        
+
         // 获得当前车体坐标系和世界坐标系的相对速度
         current_vel_b_ = best_match.GetRot().inverse() * best_match.GetVel();
         current_vel_ = best_match.GetVel();

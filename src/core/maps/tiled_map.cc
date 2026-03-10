@@ -496,11 +496,12 @@ void TiledMap::UpdateDynamicCloud(CloudPtr cloud_world, bool remove_old) {
     std::set<Vec2i, math::less_vec<2>> updated_grids;  // 被更新的chunks
     UL lock(dynamic_data_mutex_);
     for (auto& pt : cloud_world->points) {
+        // QUES: 貌似在动态区域内是不用更新地图的？？？
         if (FallsInDynamicArea(pt.getVector3fMap()) < 0) {
             continue;
         }
 
-        dynamic_map_updated_ = true;
+        dynamic_map_updated_ = true;  // 触发地图更新线程
         // 在动态区域增加点云
         Vec2i grid = Pos2Grid(math::ToEigen<float, 2, PointType>(pt));
 
@@ -533,7 +534,7 @@ void TiledMap::UpdateDynamicCloud(CloudPtr cloud_world, bool remove_old) {
                     }
                 }
 
-                // 使用和static相同的id
+                // 使用和static相同的id，这里为什么要采用一样的id呢???个人猜测是为了合并的时候用
                 id = iter_static->second->id_;
 
                 auto new_chunk =
@@ -543,6 +544,7 @@ void TiledMap::UpdateDynamicCloud(CloudPtr cloud_world, bool remove_old) {
 
                 updated_grids.emplace(grid);
             } else {
+                // TODO: 这里有点像二次建图
                 // statics当中并不存在，目前不会创建动态图层
             }
         }
@@ -561,6 +563,7 @@ void TiledMap::UpdateDynamicCloud(CloudPtr cloud_world, bool remove_old) {
                 dynamic_chunks_[g]->cloud_->points.begin(),
                 dynamic_chunks_[g]->cloud_->points.begin() + size_t(0.7 * full_size));
             dynamic_chunks_[g]->cloud_->width = full_size - size_t(0.7 * full_size);
+            // shrink_to_fit请求容器释放多余的capacity, 使capacity尽量等于当前size
             dynamic_chunks_[g]->cloud_->points.shrink_to_fit();
         }
     }
