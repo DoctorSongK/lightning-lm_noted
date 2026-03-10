@@ -109,6 +109,7 @@ void PGO::PubResult() {
 
         SE3 extra_pose = result.pose_;
         smoother_->PushPose(result.pose_);
+        // QUES: 这个平滑是干啥用的？？？
         result.pose_ = smoother_->GetPose();
 
         // 输出force 2d
@@ -117,7 +118,8 @@ void PGO::PubResult() {
         // RPYXYZ.pitch = 0;
         // RPYXYZ.z = 0;
         // result.pose_ = common::math::XYZRPYToSE3(RPYXYZ);
-
+        
+        // 发布tf
         high_freq_output_func_(result);
 
         impl_->output_pose_queue_.emplace_back(result.timestamp_, result.pose_);
@@ -187,17 +189,20 @@ bool PGO::ProcessLidarOdom(const NavState& lio_result) {
         const double last_stamp = impl_->lidar_odom_pose_queue_.back().timestamp_;
         if (lio_result.timestamp_ < last_stamp) {
             LOG(WARNING) << "当前LidarOdom定位时间戳回退，实际相减得" << lio_result.timestamp_ - last_stamp;
+            // QUES: 为什么没有直接返回，时间顺序错了还继续处理？如果继续处理，后续的逻辑不就乱套了么？难道是为了让外推结果更平滑？感觉不太合理啊
         }
     }
 
     // 保存lidarOdom帧
     impl_->lidar_odom_pose_queue_.emplace_back(lio_result);
+    // NOTE: 下面几句话屁用没有啊
     if (impl_->lidar_odom_pose_queue_.size() > 1) {
         auto curr_it = impl_->lidar_odom_pose_queue_.rbegin();
         auto last_it = curr_it;
         ++last_it;
         // curr_it->delta_t_ = curr_it->timestamp_ - last_it->timestamp_;
     }
+    //////
 
     while (impl_->lidar_odom_pose_queue_.size() >= pgo::PGO_MAX_SIZE_OF_RELATIVE_POSE_QUEUE) {
         impl_->lidar_odom_pose_queue_.pop_front();
@@ -287,6 +292,7 @@ bool PGO::ProcessLidarLoc(const LocalizationResult& loc_result) {
         impl_->lidar_odom_valid_cnt_ = 10;
     } else {
         /// 如果Odom有效，也需要累计一段时间
+        /// NOTE: 雷达里程计失效后，待10帧后才认为雷达里程计重新生效，这个时间是为了防止偶尔的雷达里程计异常导致频繁地切换状态
         if (impl_->lidar_odom_valid_cnt_ > 0) {
             impl_->lidar_odom_valid_cnt_--;
         } else {
@@ -356,6 +362,7 @@ void PGO::LogWindowState() {
     //     << "   ********* ********** ********* \n";
 }
 
+// 用imu的相关数据将output_result外推到最新时刻
 bool PGO::ExtrapolateLocResult(LocalizationResult& output_result) {
     if (!output_result.valid_) {
         return false;

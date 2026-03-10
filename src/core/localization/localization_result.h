@@ -39,7 +39,7 @@ struct LocalizationResult {
     double lidar_loc_odom_delta_ = 0;     // lidarLoc与lidarOdom对应时间两帧相差的距离
     bool lidar_loc_smooth_flag_ = false;  // Lidar loc是否满足平滑性要求（自身定位结果与外推结果类似）
 
-    bool lidar_loc_odom_error_normal_ = true;  // lidarLoc与lidarOdom对应时间两帧相差的距离超过一定阈值则为false
+    bool lidar_loc_odom_error_normal_ = true;  // lidarLoc与lidarOdom对应时间两帧相差的距离超过一定阈值则为false 雷达里程计是否有效的标志
     bool lidar_loc_odom_reliable_ = true;      // LO 认为自己的定位可不可信
 
     double lidar_odom_error_vert_ = 0;  // lidarOdom(通过滑窗首帧转换到map系下)相对于PGO定位的误差（纵向）

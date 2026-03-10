@@ -75,6 +75,8 @@ bool PGOImpl::Reset() {
     return true;
 }
 
+// NOTE: PGO的核心逻辑：每来一个PGOFrame，就把它加入到滑窗中，并触发一次优化；优化完成后，更新状态量，输出结果；如果需要的话，滑窗前移，删除一些帧。
+// 
 void PGOImpl::AddPGOFrame(std::shared_ptr<PGOFrame> pgo_frame) {
     assert(pgo_frame != nullptr);
     if (last_frame_ != nullptr) {
@@ -92,14 +94,14 @@ void PGOImpl::AddPGOFrame(std::shared_ptr<PGOFrame> pgo_frame) {
 
     // 这里尝试设置相对位姿观测，如果上游（通常是激光定位）给了就跳过；
     // 如果 LidarOdom 和 DR 都设置失败，结束本函数。
-    bool interp_lio_success = AssignLidarOdomPoseIfNeeded(pgo_frame);
-    bool interp_dr_success = AssignDRPoseIfNeeded(pgo_frame);
+    bool interp_lio_success = AssignLidarOdomPoseIfNeeded(pgo_frame);  // 获取frames时刻的LidarOdom相对位姿观测
+    bool interp_dr_success = AssignDRPoseIfNeeded(pgo_frame);          // 获取frames时刻的DR相对位姿观测
     if (!interp_lio_success && !interp_dr_success) {
         LOG(ERROR) << "PGO received pgo frame, but assign relative pose failed!";
         return;
     }
 
-    is_in_map_ = pgo_frame->lidar_loc_set_ && pgo_frame->lidar_loc_valid_;
+    is_in_map_ = pgo_frame->lidar_loc_set_ && pgo_frame->lidar_loc_valid_; // 雷达定位是否都是有效的；如果没有有效的雷达定位，那么就认为不在地图里；如果有了有效的雷达定位，那么就认为在地图里
     if (!is_in_map_) {
         //
         LOG(ERROR) << "PGO received PGOFrame with lidar_loc_set_(" << pgo_frame->lidar_loc_set_
@@ -217,7 +219,7 @@ void PGOImpl::UpdateLidarOdomStatusInFrame(NavState& lio_result, std::shared_ptr
     frame->lidar_odom_normalized_weight_ = lio_result.confidence_ * Vec6d::Ones();
     Eigen::Array3d trans_confidence = {1.0, 1.0, 1.0};
     Eigen::Array3d rot_confidence = {1.0, 1.0, 1.0};
-
+    /// QUES: 这不也是死的吗，trans_confidence和kLidarOdomTransDegenThres都是写死的，就都是false
     if ((trans_confidence < kLidarOdomTransDegenThres).any()) {
         frame->lidar_odom_trans_degenerated = true;
     }
@@ -226,6 +228,8 @@ void PGOImpl::UpdateLidarOdomStatusInFrame(NavState& lio_result, std::shared_ptr
     }
 }
 
+
+//////////////优化问题构建/////////////////
 void PGOImpl::RunOptimization() {
     // if (frames_.size() < kMinNumRequiredForOptimization) {
     //     LOG(INFO) << "Skip optimization because frame size is " << frames_.size();
